@@ -1,0 +1,5 @@
+latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,version,bright_ti4,frp,daynight
+22.00,90.00,315.0,1,1,2024-02-01,400,Suomi-NPP,n,6.1,302.0,12.0,D
+22.05,90.05,330.0,1,1,2024-02-15,500,Suomi-NPP,h,6.1,310.0,20.0,N
+22.10,90.10,290.0,1,1,2024-03-01,600,Suomi-NPP,l,6.1,280.0,5.0,D
+22.50,90.50,999.0,1,1,2024-02-20,700,Suomi-NPP,h,6.1,999.0,99.0,D

@@ -1,0 +1,42 @@
+{
+  "project": "EMBERLENS",
+  "pack_type": "documentation_and_repository_scaffold",
+  "generated_on": "2026-11-06",
+  "contains_application_code": true,
+  "contains_real_nasa_data": true,
+  "contains_secrets": false,
+  "documents": [
+    "CLAUDE.md",
+    "README.md",
+    "backend/README.md",
+    "data/README.md",
+    "data/samples/README.md",
+    "docs/API_SPECIFICATION.md",
+    "docs/ARCHITECTURE.md",
+    "docs/COMPETITION_STRATEGY.md",
+    "docs/DATA_DICTIONARY.md",
+    "docs/DATA_PIPELINE.md",
+    "docs/DECISIONS.md",
+    "docs/DEFINITION_OF_DONE.md",
+    "docs/IMPLEMENTATION_PLAN.md",
+    "docs/KIMI_K3_CLAUDE_CODE.md",
+    "docs/PRD.md",
+    "docs/PROJECT_AUDIT.md",
+    "docs/README.md",
+    "docs/ROADMAP.md",
+    "docs/SCIENTIFIC_METHODOLOGY.md",
+    "docs/SCIENTIFIC_RISK_REGISTER.md",
+    "docs/STATUS.md",
+    "docs/VALIDATION_PLAN.md",
+    "frontend/README.md",
+    "infrastructure/README.md",
+    "scripts/README.md"
+  ],
+  "notes": [
+    "Updated 2026-11-06: backend (FastAPI+DuckDB) and frontend (React+Vite+MapLibre) implemented; real FIRMS CSVs (MODIS_SP 76 rows + VIIRS_SNPP_SP 1,977 rows, window 2024-01-01..2025-12-31) in data/raw/; 2,053 canonical observations loaded.",
+    "VIIRS raw previously included 32 rows dated 2026-01-01..04; clipped to frozen window on 2026-11-06 (backup retained locally, sha256 f5dd301e...).",
+    "Merge into an existing project after repository audit; do not blindly overwrite existing files.",
+    "Verify current NASA product availability, schema, and API limits before ingestion.",
+    "The root CLAUDE.md is the primary Claude Code instruction file; AGENTS.md is intentionally not duplicated."
+  ]
+}

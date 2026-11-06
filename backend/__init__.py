@@ -1,0 +1,1 @@
+"""EMBERLENS backend modular monolith."""

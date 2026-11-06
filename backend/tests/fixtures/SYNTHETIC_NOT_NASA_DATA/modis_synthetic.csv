@@ -1,0 +1,5 @@
+latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,confidence,version,bright_ti4,frp,daynight
+22.00,90.00,310.5,1,1,2024-02-01,325,Terra,85,6.1,300.5,10.0,D
+22.00,90.01,320.0,1,1,2024-02-29,1200,Aqua,72,6.1,305.0,15.0,N
+22.01,90.00,318.0,1,1,2024-01-15,800,Terra,90,6.1,301.0,8.0,D
+22.10,90.10,315.0,1,1,2024-01-16,800,Terra,90,6.1,301.0,8.0,D

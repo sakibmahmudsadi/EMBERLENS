@@ -1,0 +1,49 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Local databases, caches, logs
+*.sqlite
+*.sqlite3
+*.db
+*.log
+.cache/
+
+# Data: commit only reviewed, redistributable, small fixtures in data/samples/
+data/raw/**
+!data/raw/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+data/curated/**
+!data/curated/.gitkeep
+data/samples/*
+!data/samples/README.md
+!data/samples/*.csv
+!data/samples/*.json
+!data/samples/*.geojson
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
