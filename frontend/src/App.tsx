@@ -34,7 +34,7 @@ export default function App() {
       const first = Array.isArray(a) ? (a[0] as { aoi_id: string; name: string }) : ((a as { items?: { aoi_id: string; name: string }[] }).items?.[0] ?? null);
       if (first) setAoi(first);
       const ds = await api.dataSources();
-      const items = ds.items ?? ds.sources ?? [];
+      const items = ds.items ?? ds.sources ?? ds.snapshots ?? [];
       setSensorOpts({ sensors: [...new Set(items.map(i => i.sensor).filter(Boolean))], platforms: [...new Set(items.map(i => i.platform).filter(Boolean))], products: [...new Set(items.map(i => i.product_id).filter(Boolean))] });
       const q = new URLSearchParams();
       if (first?.aoi_id) q.set('aoi_id', first.aoi_id);
@@ -45,7 +45,7 @@ export default function App() {
       if (end) q.set('end', end);
       q.set('page', String(pg)); q.set('page_size', '100');
       const o = await api.observations(q);
-      setObs(o.items); setObsTotal(o.total); setPage(pg);
+      setObs(o.items ?? o.data ?? []); setObsTotal(o.total ?? o.pagination?.total ?? 0); setPage(pg);
       const c = await api.calendar(new URLSearchParams(q.toString().replace(/page.*/, '')));
       setCalendar(c);
       if (!start) setStart(c.period.start); if (!end) setEnd(c.period.end);
@@ -85,8 +85,8 @@ export default function App() {
           {coverage && (
             <section className="panel" aria-label="Coverage">
               <h2>Coverage</h2>
-              {(coverage.items ?? coverage.coverage ?? []).length === 0 ? <Empty msg="Coverage endpoint returned no items." /> :
-                <ul className="list">{(coverage.items ?? coverage.coverage ?? []).slice(0, 20).map((c, i) => (
+              {(coverage.items ?? coverage.coverage ?? coverage.availability ?? []).length === 0 ? <Empty msg="Coverage endpoint returned no items." /> :
+                <ul className="list">{(coverage.items ?? coverage.coverage ?? coverage.availability ?? []).slice(0, 20).map((c, i) => (
                   <li key={i}><span>{c.sensor ?? ''} {c.product_id ?? ''} · {c.period_start ?? ''} → {c.period_end ?? ''}</span><span className="pill">{coverageStatusLabel(c.status)}</span></li>
                 ))}</ul>}
             </section>
