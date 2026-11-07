@@ -14,6 +14,7 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
   const [end, setEnd] = useState('2026-06-07');
   const [sensor, setSensor] = useState('VIIRS');
   const [gap, setGap] = useState(24);
+  const [distance, setDistance] = useState('');
   const [format, setFormat] = useState<'json' | 'csv' | 'geojson'>('json');
   const [result, setResult] = useState<HotspotGroupsResponse | null>(null);
   const [error, setError] = useState('');
@@ -27,9 +28,14 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
     }
     const span = (Date.parse(`${inclusiveToExclusive(end)}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000;
     if (span > 90) { setError('Choose a period of 90 days or less.'); return; }
+    const distanceM = distance.trim() === '' ? null : Number(distance);
+    if (distanceM !== null && (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM > 10000)) {
+      setError('Distance override must be greater than 0 and no more than 10,000 metres.'); return;
+    }
     setBusy(true);
     const q = new URLSearchParams({ aoi_id: aoiId, start, end: inclusiveToExclusive(end), max_gap_hours: String(gap) });
     if (sensor) q.set('sensor', sensor);
+    if (distanceM !== null) q.set('distance_m', String(distanceM));
     try { setResult(await api.hotspotGroups(q)); }
     catch (ex) { setError(ex instanceof Error ? ex.message : String(ex)); }
     finally { setBusy(false); }
@@ -99,6 +105,7 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
         <label>Through<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
         <label>Sensor<select value={sensor} onChange={e => setSensor(e.target.value)}><option value="">All</option>{sensors.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
         <label>Max gap (hours)<input type="number" min="1" max="72" value={gap} onChange={e => setGap(Number(e.target.value))} /></label>
+        <label>Distance override (m)<input type="number" min="1" max="10000" step="any" value={distance} onChange={e => setDistance(e.target.value)} placeholder="Sensor default" /></label>
         <button className="apply-button" type="submit" disabled={busy || !aoiId}>{busy ? 'Grouping…' : 'Find groups'}</button>
       </form>
       {error && <ErrorState msg={error} />}

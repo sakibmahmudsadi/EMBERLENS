@@ -67,3 +67,10 @@
 - **Steps:** Query a 7-day period with VIIRS selected. Download JSON, CSV, and GeoJSON. Inspect each file's metadata and group rows.
 - **Expected:** Metadata contains AOI, exact UTC period with inclusive/exclusive end semantics, selected filters, method ID/status and parameters, matched-observation and group counts, all contributing source snapshot IDs, source attribution, and limitations. Each group retains its observation and snapshot IDs. GeoJSON coordinates are WGS 84 centroids and are explicitly not fire perimeters.
 - **BrowserOS result (2026-11-08):** PASS for JSON, CSV, and GeoJSON against the rebuilt isolated QA app for 2026-06-01–2026-06-07; all carry 18 matched observations, 2 groups, VIIRS filter, source snapshot ID, grouping method, NASA FIRMS attribution, and limitations. GeoJSON parsed as a two-feature FeatureCollection with its WGS 84 centroid note.
+
+## FE-MC-010 — Hotspot grouping exposes distance sensitivity
+
+- **Priority:** P1 · **Type:** Experimental analysis usability
+- **Steps:** Query the same AOI/date/sensor/max-gap parameters twice, once with a 500 m distance override and once with a 10,000 m override. Repeat with the distance field empty to use the sensor default.
+- **Expected:** Each result shows the requested distance (or sensor default), keeps the same matched-observation count when only distance changes, and may produce different group counts. The export manifest records the selected distance. The UI continues to label grouping experimental and does not describe groups as confirmed incidents.
+- **BrowserOS result (2026-11-08):** PASS on the bundled local QA app for June 1–7, 2026, VIIRS and 24-hour max gap: 18 matched observations returned 2 groups at 500 m and 3 groups at 10,000 m; the UI displayed each distance and retained the experimental status. The 1,258 px desktop screenshot showed the added control row fits without pushing the page wider than the viewport.

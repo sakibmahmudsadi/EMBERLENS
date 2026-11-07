@@ -114,7 +114,7 @@ def test_map_density_covers_matching_dataset_without_cross_sensor_sums(client):
 def test_hotspot_group_response_exposes_reusable_query_provenance(client):
     response = client.get("/api/v1/hotspot-groups", params={
         "aoi_id": "demo-aoi", "start": "2024-01-01", "end": "2024-03-31",
-        "sensor": "VIIRS", "max_gap_hours": 12,
+        "sensor": "VIIRS", "max_gap_hours": 12, "distance_m": 500,
     })
     assert response.status_code == 200
     body = response.json()
@@ -123,8 +123,9 @@ def test_hotspot_group_response_exposes_reusable_query_provenance(client):
     assert body["period"]["end"].startswith("2024-03-31")
     assert body["filters"] == {
         "sensor": "VIIRS", "platform": None, "product_id": None,
-        "max_gap_hours": 12.0, "distance_m": None,
+        "max_gap_hours": 12.0, "distance_m": 500.0,
     }
+    assert body["method"]["candidate_distance_m"] == 500.0
     assert body["source_snapshot_ids"]
     assert body["source_snapshot_ids"] == sorted(set(body["source_snapshot_ids"]))
     assert {
