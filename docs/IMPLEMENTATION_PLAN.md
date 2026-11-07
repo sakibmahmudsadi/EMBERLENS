@@ -1,5 +1,7 @@
 # Implementation Plan
 
+> **Historical plan:** this document was drafted for the 24-month prototype. The accepted active scope is now ADR-012: Bangladesh national bbox, `MODIS_SP` + `VIIRS_SNPP_SP`, 2010-01-01 through 2026-07-31. Do not use conflicting 24-month steps below as current instructions. Use `docs/STATUS.md`, `DATA_SOURCE_REGISTER.md` §11, and `docs/SOURCE_DATA_COVERAGE_REPORT.md` for the actual project state and remaining work.
+
 ## Prototype guardrail
 
 For the competition prototype, process one AOI and a fixed period of no more than 24 months. Prefer the latest common source-available window for the selected products, record known source-service gaps, freeze its dates/snapshot, and do not download or sort each sensor's complete archive. The result is a demo of the source-to-calendar workflow, not a 20-year historical analysis.

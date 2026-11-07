@@ -1,6 +1,6 @@
 # Scientific Methodology and Measurement Contract
 
-**This document is a scientific design contract, not a statement that the methods have already been validated.** Every method marked *proposed* must be tested on the actual source products and demo AOI before being presented as a result. The prototype is limited to one AOI and a fixed window of at most 24 months; it is a workflow demonstration, not a multi-decade historical reconstruction.
+**This document is a scientific design contract, not a statement that the methods have already been validated.** Every method marked *proposed* must be tested on the actual source products and demo AOI before being presented as a result. Current prototype scope is one task-specified Bangladesh bounding box and the fixed 2010-01-01–2026-07-31 source snapshot; it is not a complete 20-year record or a validated climatology.
 
 ## 1. Scientific objective
 
@@ -99,7 +99,7 @@ Every calendar output must declare:
 
 Prototype defaults: count source observation rows after exact duplicate removal within the same product/snapshot; keep counts separate by sensor/platform/product; use UTC month boundaries; include a point on the AOI boundary using a documented point-in-polygon rule; and apply no confidence filter by default. Preserve native confidence values. These rules produce comparable query structure, not physically equivalent measurements.
 
-Prototype default: use a **month-by-year matrix** over the fixed window of at most 24 months. This is a descriptive calendar of returned source observations, not a long-term seasonal normal. A date-specific detail view may show observations, but do not use fine daily bins to imply complete observation opportunities or absence of activity.
+Prototype default: use a **month-by-year matrix** over the fixed snapshot. This is a descriptive calendar of returned source observations, not a validated seasonal normal. A date-specific detail view may show observations, but do not use fine daily bins to imply complete observation opportunities or absence of activity.
 
 ### 7.2 Show sensor-stratified results
 
@@ -132,7 +132,7 @@ A shared schema is necessary but not sufficient. For the bounded prototype, defi
 5. Test candidate adjustments against held-out periods or regions before considering a fused index.
 6. Only then publish a fused index or adjustment, clearly labeled as derived and versioned.
 
-A two-year prototype does not establish a robust climatological baseline. Keep baseline/anomaly cards disabled or explicitly exploratory unless a longer reference period and suitable validation evidence are added.
+The 2010–2026 snapshot is still shorter than a complete 20-year record and its source-gap evidence is not valid-pixel coverage. Any baseline/anomaly results must remain explicitly exploratory until the method, missingness handling, sensor separation, and validation are documented and tested.
 
 Potential comparison techniques (research candidates, not approved methods): rate normalization by valid observation opportunities; sensor-specific standardization against a reference distribution; overlap-period regression/calibration; stratification by region/season; and grid-based aggregation. Each must be evaluated for assumptions and bias.
 
@@ -158,9 +158,9 @@ A point-in-polygon rule is a reasonable starting choice for a point-based applic
 
 ## 10. Optional hotspot grouping
 
-If P1 event/grouping is built, use a neutral name such as **hotspot group** or **algorithmic detection cluster**.
+The prototype exposes an **experimental, unvalidated** `/api/v1/hotspot-groups` method labeled “algorithmic hotspot group.” It clusters only within the same sensor/platform/product; it never fuses cross-sensor observations or calls groups confirmed incidents. `hotspot-groups-grid-0.1` uses a local metric grid, pair links within 24 hours, a 72-hour component-duration cap to limit transitive chaining, and candidate distance defaults of 2,000 m for MODIS and 750 m for VIIRS (two nominal pixel widths). Callers may provide a distance threshold. Each group carries contributing observation IDs, source snapshot IDs, interval, centroid, and bounds.
 
-A candidate approach is sensor-aware spatiotemporal clustering, but no fixed distance/time thresholds should be selected by intuition alone. Evaluate:
+These are engineering defaults, not validated fire-event thresholds. Before scientific interpretation, evaluate:
 - source pixel scale and location uncertainty;
 - overpass time and repeated detections;
 - transitive chaining (a long chain of near-neighbor points can merge distinct activity);
@@ -168,9 +168,19 @@ A candidate approach is sensor-aware spatiotemporal clustering, but no fixed dis
 - sensitivity to distance/time thresholds;
 - cross-sensor association versus within-sensor grouping.
 
+The endpoint is bounded to 90 days and 50,000 matching observations to prevent expensive national-history clustering requests. Results are suitable for prototype exploration only until the sensitivity report and domain evaluation are completed.
+
 Keep a many-to-many provenance relation from every group to its contributing observation IDs. Report method/version, parameters, and known limitations. Do not call the result a confirmed incident or perimeter.
 
 ## 11. Historical baseline and anomaly methodology
+
+### Current prototype display (descriptive only)
+
+The seasonal panel reports returned-row totals by calendar month and, separately for each sensor/platform/product, the median and 25th–75th percentile among month-year bins that contain records and are not marked with a FIRMS-reported missing source date. Empty bins and bins with a known source gap are excluded, never converted to zero. The displayed sample size (`n`) is the number of included month-year bins. This is an exploratory distribution of returned records, not an expected-activity interval, exposure-adjusted baseline, anomaly score, or critical-period flag. A month without a known FIRMS missing date still does not establish valid-pixel or clear-sky opportunity over the AOI.
+
+The selected calendar-cell detail also shows an **exploratory historical count context** (`observed-count-prior-month-IQR-v1`). For the selected sensor/platform/product and calendar month, it uses only earlier years inside the currently selected calendar window whose bins have returned records and no FIRMS-reported missing source date. It excludes the target year, requires at least five reference years, and reports the prior-sample median and linearly interpolated 25th–75th percentile range. The selected count is labeled above, within, or below that observed middle range; this is a descriptive comparison, not an anomaly score or expected burning range. A selected bin with no records, a known source gap, or insufficient prior samples receives no above/within/below label. The detail lists reference years and source snapshot IDs so the comparison can be traced.
+
+This comparison remains subject to the same observation-opportunity limitation as the seasonal display. It is not an exposure-adjusted baseline, validated unusual-fire-period detector, alert, or risk signal. Changing the selected calendar date range changes which prior years are available for the reference sample.
 
 ### Baseline
 

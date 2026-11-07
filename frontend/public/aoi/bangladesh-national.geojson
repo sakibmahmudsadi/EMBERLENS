@@ -1,0 +1,17 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bangladesh (national bounding box)",
+        "note": "Task-specified bounding box (W=88.0, S=20.5, E=92.7, N=26.7). It is not an authoritative national boundary and over-includes adjacent India/Myanmar at the edges.",
+        "source": "Task-specified national bounding box (user-approved 2026-11-06)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[88.0, 20.5], [92.7, 20.5], [92.7, 26.7], [88.0, 26.7], [88.0, 20.5]]]
+      }
+    }
+  ]
+}

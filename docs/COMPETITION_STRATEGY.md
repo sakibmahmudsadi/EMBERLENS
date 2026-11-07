@@ -10,7 +10,7 @@ The team's strongest submission is not the one with the most features. It is the
 
 **EMBERLENS turns NASA's sensor-specific active-fire observations into a traceable, sensor-aware monthly calendar for a selected place.**
 
-The competition prototype uses one AOI and a fixed source window of at most 24 months. It demonstrates the workflow and data provenance; it is not a complete multi-decade history, robust climatology, emergency alert, or validated forecast.
+The active prototype uses the task-specified Bangladesh national bounding box and frozen NASA FIRMS Standard snapshot from 2010-01-01 through 2026-07-31. VIIRS begins at its product availability date in 2012. This is a roughly 16.5-year detection history, but it is not a complete fire-event history, valid-pixel coverage record, robust climatology, emergency alert, or validated forecast. State the bbox overhang and coverage limitations in the demonstration.
 
 Do not call the product an official NASA tool, NASA-endorsed platform, wildfire prediction system, or emergency alert service.
 
@@ -21,8 +21,8 @@ A short demonstration should show a complete evidence chain:
 1. Select an AOI.
 2. See source/product availability and data coverage.
 3. Switch between MODIS and VIIRS while retaining their identity.
-4. Inspect the monthly burning-activity calendar across the fixed demo window, up to 24 months.
-5. Compare MODIS and VIIRS series in aligned AOI/month bins while explaining that their counts remain sensor-specific. Do not claim a robust anomaly from this short window.
+4. Inspect the monthly burning-activity calendar across the frozen 2010–2026 snapshot.
+5. Compare MODIS and VIIRS series in aligned AOI/month bins while explaining that their counts remain sensor-specific. Treat the displayed seasonal summaries as descriptive; do not claim a validated anomaly or exposure-adjusted baseline.
 6. Open a source observation to show its satellite, time, native attributes, and provenance.
 7. Export the bounded observations/calendar with metadata and limitations.
 
@@ -45,9 +45,9 @@ Do not claim uniqueness against every existing platform unless a competitor revi
 Prepare the following artifacts for judging:
 - a source/product register with official NASA references;
 - a pipeline diagram and explanation of sensor-aware harmonization;
-- a fixed demo data snapshot covering no more than 24 months, with provenance;
-- validation results for the monthly calendar and sensor-specific comparison;
-- one short sensitivity analysis or overlap-period comparison;
+- the frozen 2010–2026 data snapshot with manifests and the source-data coverage report;
+- validation results for the monthly calendar and sensor-specific counts;
+- an explicitly descriptive sensor comparison; do not imply cross-sensor equivalence or a validated baseline;
 - a live or recorded end-to-end demo;
 - example export plus metadata sidecar;
 - limitations and known risks.

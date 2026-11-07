@@ -21,9 +21,9 @@ If this is an existing repository, inspect it before creating, moving, renaming,
 
 ## 3. Product north star
 
-The prototype deliverable is a **sensor-aware monthly burning-activity calendar for one selected area of interest**, built from NASA MODIS and VIIRS active-fire observations. Limit the initial source window to at most 24 months; do not backfill to each sensor's start date. Prefer the latest common source-data window available for the selected products and freeze its exact dates and source snapshots. Here, “available” means represented in the selected source archives, not a guarantee of clear-sky or complete sensor observation coverage. The map enables discovery; the calendar, source traceability, and small reusable export deliver the prototype value. Do not let generic dashboard features displace the challenge's central task.
+The prototype deliverable is a **sensor-aware monthly burning-activity calendar for one selected area of interest**, built from NASA MODIS and VIIRS active-fire observations. The accepted current scope is ADR-012: Bangladesh task-specified national bbox, NASA FIRMS Standard MODIS_SP and VIIRS_SNPP_SP, fixed 2010-01-01 through 2026-07-31 snapshot. Do not extend this scope or backfill to earlier product start dates without a new accepted decision. Source availability is not a guarantee of clear-sky or complete sensor observation coverage. The map enables discovery; the calendar, source traceability, and reusable export deliver the prototype value.
 
-A 24-month slice demonstrates the product workflow, but it does not establish a long-term climatology, robust anomaly baseline, or forecast. Defer those claims and features unless independently supported by a longer reference period and validation.
+The 2010–2026 snapshot supports descriptive historical exploration, but it does not establish an exposure-adjusted climatology, robust anomaly baseline, or forecast. Defer those claims and features unless independently supported by valid observation-opportunity data and validation.
 
 ## 4. Non-negotiable scientific integrity
 
@@ -70,7 +70,7 @@ Do not claim a task is complete because code was written. Use `docs/DEFINITION_O
 
 ## 7. Existing code and ambiguity
 
-The current PRD, methodology, and accepted decision records define scope. If an earlier pasted master handoff or mockup conflicts with them, follow the current documents: a one-AOI, at-most-24-month, calendar-first prototype. Do not overwrite an established architecture simply because this starter pack proposes a default. If the repository differs, compare the options and recommend the smallest safe path. Record material choices in `docs/DECISIONS.md` before implementation. Ask one focused question only when a decision blocks safe progress; otherwise proceed with a clearly documented reversible assumption.
+The current PRD, methodology, and accepted decision records define scope. ADR-012 supersedes earlier 24-month guidance and sets the current one-AOI 2010–2026 national snapshot. If a pasted handoff, mockup, or historical plan conflicts with the accepted decision, follow ADR-012. Do not overwrite an established architecture simply because this starter pack proposes a default. Record material choices in `docs/DECISIONS.md` before implementation. Ask one focused question only when a decision blocks safe progress; otherwise proceed with a clearly documented reversible assumption.
 
 ## 8. UI quality bar
 
@@ -80,7 +80,7 @@ Never use generated map art as a substitute for a real map or real data layer. D
 
 ## 9. Competition quality bar
 
-Optimize for scientific validity, relevance to the exact challenge, clear impact, originality, and strong communication. The demo must work with one known AOI and a reproducible source snapshot covering no more than 24 months. Show provenance and limitations rather than hiding uncertainty. Demonstrate the journey from NASA source observation to monthly, sensor-specific calendar and downloadable evidence; do not imply a complete multi-decade history.
+Optimize for scientific validity, relevance to the exact challenge, clear impact, originality, and strong communication. The demo must work with the registered Bangladesh AOI and reproducible 2010–2026 source snapshot. Show provenance and limitations rather than hiding uncertainty. Demonstrate the journey from NASA source observation to monthly, sensor-specific calendar and downloadable evidence; do not imply complete observation coverage, calibrated cross-sensor equivalence, or a validated anomaly/forecast result.
 
 ## 10. Definition of a strong response
 

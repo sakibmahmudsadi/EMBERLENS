@@ -27,6 +27,9 @@ SENSOR_VOCAB = {"MODIS": "MODIS", "VIIRS": "VIIRS"}
 PLATFORM_ALIASES = {
     "terra": "Terra",
     "aqua": "Aqua",
+    # FIRMS VIIRS SP country/area exports encode Suomi-NPP as "N" (verified
+    # in data/raw/VIIRS_SNPP_SP_*.csv, 2026-11-06; see D-26 fix).
+    "n": "Suomi-NPP",
     "suomi-npp": "Suomi-NPP",
     "s-npp": "Suomi-NPP",
     "snpp": "Suomi-NPP",
@@ -62,7 +65,10 @@ MODIS_FIELDS = {
 VIIRS_FIELDS = {
     "latitude": "latitude",
     "longitude": "longitude",
-    "brightness": "brightness_primary_native",
+    # VIIRS 375m SP exports carry bright_ti4 (primary 3.7um) + bright_ti5,
+    # NOT MODIS 'brightness'. D-26 fix (verified 2026-11-06).
+    "bright_ti4": "brightness_primary_native",
+    "bright_ti5": "brightness_secondary_native",
     "scan": "scan_native",
     "track": "track_native",
     "acq_date": "acq_date_native",
@@ -70,7 +76,6 @@ VIIRS_FIELDS = {
     "satellite": "platform",
     "confidence": "confidence_raw",
     "version": "collection_version",
-    "bright_ti4": "brightness_secondary_native",
     "frp": "frp_native",
     "daynight": "daynight_native",
 }
@@ -96,6 +101,9 @@ def parse_acquired_at_utc(acq_date: str, acq_time: Any) -> datetime:
     t = str(acq_time).strip() if acq_time is not None else "0"
     if t in ("", "None"):
         t = "0"
+    # D-14 fix: strict HHMM — never silently truncate >4 digits.
+    if not t.isdigit() or len(t) > 4:
+        raise ValueError(f"Invalid acq_time: {acq_time!r} (expected 1-4 digit HHMM)")
     t = t.zfill(4)
     hh, mm = int(t[:2]), int(t[2:4])
     if not (0 <= hh <= 23 and 0 <= mm <= 59):
@@ -202,8 +210,11 @@ def map_row(
 
     acquired = parse_acquired_at_utc(str(canonical["acq_date_native"]), canonical.get("acq_time_native"))
     fp = fingerprint(product_id=product_id, collection_version=collection_version, row=dict(source_row))
+    # D-12 fix: observation identity is per (snapshot, row) — identical rows
+    # loaded under two snapshots must BOTH survive (no cross-snapshot loss).
+    obs_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{source_snapshot_id}|{fp}"))
     return CanonicalObservation(
-        observation_id=str(uuid.uuid5(uuid.NAMESPACE_URL, fp)),
+        observation_id=obs_id,
         source_snapshot_id=source_snapshot_id,
         source_row_fingerprint=fp,
         source_record_id=None,  # FIRMS CSVs supply no upstream unique ID

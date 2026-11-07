@@ -1,4 +1,6 @@
-# NASA FIRMS Source Verification and Frozen Demo Configuration (Proposed)
+# Historical NASA FIRMS Source Verification and Proposed Configuration
+
+> **Historical reference:** this investigation predates the accepted national snapshot. Its proposed 24-month/Sundarbans configuration, key-availability note, and acquisition-route recommendations are superseded. Current product/date/availability facts are recorded in `DATA_SOURCE_REGISTER.md` §11 and `docs/SOURCE_DATA_COVERAGE_REPORT.md`; the active decision is ADR-012.
 
 **Project:** EMBERLENS — NASA Space Apps Challenge 2026, *Harmonization of MODIS and VIIRS Hot Spots*  
 **Status:** Proposed configuration awaiting team acceptance (see `DECISIONS.md` ADR-008 → ADR-011)  

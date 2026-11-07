@@ -18,12 +18,12 @@ export function SensorChips({ label, options, selected, onChange }: { label: str
   );
 }
 // Keep hook usage simple: parent fetches data-sources and passes options down.
-export function SensorFilters({ options, value, onChange }: { options: { sensors: string[]; platforms: string[]; products: string[] }; value: SensorFilter; onChange: (v: SensorFilter) => void }) {
+export function SensorFilters({ options, value, onChange, compact = false }: { options: { sensors: string[]; platforms: string[]; products: string[] }; value: SensorFilter; onChange: (v: SensorFilter) => void; compact?: boolean }) {
   useEffect(() => { /* no-op: reserved for future validation */ }, []);
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+  return <div className={compact ? 'sensor-filter-groups compact' : 'sensor-filter-groups'}>
     <SensorChips label="Sensor" options={options.sensors} selected={value.sensors} onChange={v => onChange({ ...value, sensors: v })} />
-    <SensorChips label="Platform" options={options.platforms} selected={value.platforms} onChange={v => onChange({ ...value, platforms: v })} />
-    <SensorChips label="Product" options={options.products} selected={value.products} onChange={v => onChange({ ...value, products: v })} />
+    {!compact && <SensorChips label="Platform" options={options.platforms} selected={value.platforms} onChange={v => onChange({ ...value, platforms: v })} />}
+    {!compact && <SensorChips label="Product" options={options.products} selected={value.products} onChange={v => onChange({ ...value, products: v })} />}
   </div>;
 }
 export const SENSOR_EXPLAINER = 'MODIS and VIIRS differ in spatial resolution, overpass schedule, algorithm, and confidence semantics. Series are never summed into a single number. Aligned months do not make counts physically equivalent.';

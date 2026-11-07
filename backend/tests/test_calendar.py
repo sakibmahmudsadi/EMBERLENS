@@ -14,7 +14,12 @@ from backend.calendar_agg import (
     NO_RECORDS_COVERAGE_UNVERIFIED,
     RECORDS_PRESENT,
 )
-from backend.calendar_agg.aggregation import aggregate_calendar, month_bins, resolve_coverage_status
+from backend.calendar_agg.aggregation import (
+    aggregate_calendar,
+    aggregate_calendar_from_month_counts,
+    month_bins,
+    resolve_coverage_status,
+)
 from backend.db.database import point_in_polygon
 
 EXPECTED = {
@@ -26,7 +31,7 @@ EXPECTED = {
 
 
 def test_calendar_counts_and_statuses(seeded_db, db):
-    from tests.conftest import AOI_GEOMETRY, TEST_END, TEST_START
+    from backend.tests.conftest import AOI_GEOMETRY, TEST_END, TEST_START
 
     rows = aggregate_calendar(
         seeded_db.observations_for_calendar(),
@@ -72,7 +77,7 @@ def test_month_boundary_start_inclusive_end_exclusive():
         {"sensor": "MODIS", "platform": "Terra", "product_id": "P", "latitude": 22.0,
          "longitude": 90.0, "acquired_at_utc": end, "source_snapshot_id": "s"},
     ]
-    from tests.conftest import AOI_GEOMETRY
+    from backend.tests.conftest import AOI_GEOMETRY
 
     rows = aggregate_calendar(obs, aoi_id="demo-aoi", aoi_geometry=AOI_GEOMETRY,
                               start=datetime(2024, 1, 1, tzinfo=timezone.utc), end=end)
@@ -81,7 +86,7 @@ def test_month_boundary_start_inclusive_end_exclusive():
 
 
 def test_boundary_point_included(db):
-    from tests.conftest import AOI_GEOMETRY
+    from backend.tests.conftest import AOI_GEOMETRY
 
     assert point_in_polygon(21.0, 89.0, AOI_GEOMETRY)  # exact corner
     assert point_in_polygon(23.0, 90.0, AOI_GEOMETRY)  # exactly on edge
@@ -95,3 +100,44 @@ def test_coverage_status_logic():
     assert resolve_coverage_status(0, "unavailable") == "product_unavailable"
     assert resolve_coverage_status(0, "unknown") == "coverage_unknown"
     assert resolve_coverage_status(0, None) == NO_RECORDS_COVERAGE_UNVERIFIED
+
+
+def test_calendar_snapshot_provenance_is_month_specific():
+    from backend.tests.conftest import AOI_GEOMETRY, TEST_END, TEST_START
+
+    rows = aggregate_calendar(
+        [
+            {"sensor": "MODIS", "platform": "Terra", "product_id": "P", "latitude": 22.0,
+             "longitude": 90.0, "acquired_at_utc": TEST_START, "source_snapshot_id": "snapshot-jan"},
+            {"sensor": "MODIS", "platform": "Terra", "product_id": "P", "latitude": 22.0,
+             "longitude": 90.0, "acquired_at_utc": datetime(2024, 2, 1, tzinfo=timezone.utc),
+             "source_snapshot_id": "snapshot-feb"},
+        ],
+        aoi_id="demo-aoi", aoi_geometry=AOI_GEOMETRY, start=TEST_START, end=TEST_END,
+    )
+    by_month = {row["period_start_utc"].strftime("%Y-%m"): row["source_snapshot_ids"] for row in rows}
+    assert by_month["2024-01"] == '["snapshot-jan"]'
+    assert by_month["2024-02"] == '["snapshot-feb"]'
+    assert by_month["2024-03"] == "[]"
+
+
+def test_duckdb_calendar_fast_path_matches_python_aggregation(seeded_db):
+    from backend.tests.conftest import AOI_GEOMETRY, TEST_END, TEST_START
+
+    python_rows = aggregate_calendar(
+        seeded_db.observations_for_calendar(), aoi_id="demo-aoi", aoi_geometry=AOI_GEOMETRY,
+        start=TEST_START, end=TEST_END,
+    )
+    monthly_counts = seeded_db.query_observation_month_counts(
+        aoi_geometry=AOI_GEOMETRY, start=TEST_START, end=TEST_END,
+    )
+    duckdb_rows = aggregate_calendar_from_month_counts(
+        monthly_counts, aoi_id="demo-aoi", start=TEST_START, end=TEST_END,
+    )
+    def shape(rows):
+        return {
+            (row["sensor"], row["platform"], row["product_id"], row["period_start_utc"]):
+            (row["observation_count"], row["source_snapshot_ids"])
+            for row in rows
+        }
+    assert shape(duckdb_rows) == shape(python_rows)

@@ -1,0 +1,29 @@
+services:
+  emberlens:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: emberlens:local
+    environment:
+      EMBERLENS_DB: /var/lib/emberlens/emberlens-bangladesh.duckdb
+      EMBERLENS_AOI_IDS: ${EMBERLENS_AOI_IDS:-bangladesh-bd}
+      EMBERLENS_SERVE_FRONTEND: "true"
+      PORT: "8000"
+      DATA_ROOT: /app/data
+    ports:
+      - "${WEB_PORT:-8080}:8000"
+    user: "${EMBERLENS_UID:-1000}:${EMBERLENS_GID:-1000}"
+    volumes:
+      - type: bind
+        source: ${EMBERLENS_DATA_DIR:-./deploy-data}
+        target: /var/lib/emberlens
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

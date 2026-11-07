@@ -1,6 +1,6 @@
 # Data Dictionary and Canonical Observation Contract
 
-**Status:** Initial schema proposal. Source mappings must be verified against the exact downloaded product files and their current NASA product guides. The prototype data window is one AOI and at most 24 months; fixed dates belong in each source snapshot manifest.
+**Status:** Schema and source mappings for the frozen Bangladesh snapshot. The active scope is the task-specified Bangladesh bounding box and 2010-01-01–2026-07-31 MODIS_SP + VIIRS_SNPP_SP snapshot; it is not an authoritative national boundary. Product-native FRP and confidence fields remain distinct from any normalized values. See `DATA_SOURCE_REGISTER.md` §10 and `docs/STATUS.md`.
 
 ## 1. Design principles
 

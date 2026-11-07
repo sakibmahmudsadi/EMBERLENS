@@ -20,7 +20,7 @@
 | R-16 | Source product schema changes | Ingestion failures or silent corruption | Schema validation, alert on unknown columns, version mappings | Schema drift test/report |
 | R-17 | API key committed or exposed in browser | Unauthorized use | Server-side secret storage, `.env` ignored, secret scan | No secrets in repo/build |
 | R-18 | Fake data presented as live output | Judges/users misled | Separate fixtures, labels, and demo-mode indicator | Data provenance visible |
-| R-19 | Two-year prototype presented as long-term climatology or robust anomaly result | Overstated historical insight | Cap the prototype at 24 months but label it as a workflow demo; defer long-term baseline/anomaly claims unless additional reference data and validation are added | Date window and limits visible in UI/export |
+| R-19 | Finite historical snapshot presented as a validated climatology or robust anomaly result | Overstated historical insight | Label the 2010–2026 snapshot accurately; defer validated baseline/anomaly claims until methods and coverage evidence pass validation | Date window and limits visible in UI/export |
 
 ## Risk review procedure
 

@@ -48,22 +48,16 @@ Use Kimi as a disciplined engineer, not as a one-prompt app generator:
 6. Ask it to inspect its own diff and update the status/decision log.
 7. Keep optional features deferred until the calendar works end to end.
 
-## 6. First prompt to use after opening the real repository
+## 6. Prompt for continuing work in the current repository
 
 ```text
-Read CLAUDE.md and the relevant documents in docs/. Start with docs/PROJECT_AUDIT.md.
+Read CLAUDE.md, docs/DECISIONS.md ADR-012, docs/STATUS.md, DATA_SOURCE_REGISTER.md §11, and docs/SOURCE_DATA_COVERAGE_REPORT.md first. Treat earlier 24-month/Sundarbans plans and pasted handoffs as historical when they conflict with ADR-012.
 
-Audit the actual application repository and datasets first. Follow the current PRD's one-AOI, at-most-24-month prototype scope and do not backfill full sensor archives. Do not refactor, delete, or rename files during reconnaissance. Verify source provenance and exact NASA FIRMS product/version metadata rather than guessing from file names. Run only safe documented checks and record exact commands/results. Never print secrets.
+The accepted data scope is already downloaded, validated, and loaded: Bangladesh task-specified bbox (`bangladesh-bd`), MODIS_SP plus VIIRS_SNPP_SP, 2010-01-01 through 2026-07-31. Do not re-download, re-load, alter the source register, or change products/window unless the user explicitly changes the scope. Never print, log, or commit NASA keys.
 
-Produce the audit deliverables requested in docs/PROJECT_AUDIT.md. Update docs/STATUS.md only with facts you verified. Present:
-1. what genuinely works;
-2. what data is actually available and its provenance;
-3. the main scientific risks;
-4. what should be retained or changed in the architecture;
-5. the smallest P0 vertical slice to implement next;
-6. evidence and unresolved questions.
+Continue the existing project toward release. Recheck current files and runtime before relying on status notes. The API listening on port 8000 is known to be stale; do not disrupt it or access the national DB for writes. Verify source changes with the isolated container/scratch DB. Focus on remaining measurable gaps in docs/STATUS.md: public deployment with persistent storage/TLS, scientific limitations and validation, full export traceability, and a controlled runtime cutover. Make reversible improvements directly, run the relevant tests, and update status only from verified evidence.
 
-After presenting the audit, proceed with the smallest P0 vertical slice when the repository and data make the scope clear. Ask only about a decision that genuinely blocks safe progress; do not wait on approval for routine implementation choices.
+Do not claim the project is complete while public deployment or required validation remains open. If a task truly requires a provider account, domain, or a user-controlled runtime action, finish all local preparation first and state the exact remaining external step.
 ```
 
 ## 7. Practical rule

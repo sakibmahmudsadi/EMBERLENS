@@ -52,13 +52,16 @@ def load_env() -> None:
 load_env()
 
 AOI = {
-    "aoi_id": "sundarbans-bd",
-    "name": "Sundarbans (Bangladesh/India border mangrove forest)",
-    "bbox": {"west": 88.0, "south": 21.5, "east": 90.0, "north": 22.7},
-    "bbox_source": "Task-specified demo bbox (no public boundary source reachable 2026-11-06)",
+    "aoi_id": "bangladesh-bd",
+    "name": "Bangladesh (national bounding box; includes small out-of-country overhang)",
+    "bbox": {"west": 88.0, "south": 20.5, "east": 92.7, "north": 26.7},
+    "bbox_source": "Task-specified national bounding box (user-approved 2026-11-06); not an authoritative boundary and over-includes border-adjacent India/Myanmar",
     "crs": "EPSG:4326",
 }
-WINDOW = {"start": "2024-01-01", "end": "2025-12-31"}  # 24 months; confirm SP availability once key exists
+# Frozen common Standard Product window verified against FIRMS data_availability (2026-11-06):
+# MODIS_SP 2000-11-01..2026-08-31; VIIRS_SNPP_SP 2012-01-20..2026-07-31.
+# End is capped at the common VIIRS_SNPP_SP maximum; MODIS-only Aug-2026 is intentionally excluded.
+WINDOW = {"start": "2010-01-01", "end": "2026-07-31"}  # National Bangladesh dataset 2010-present; user-requested 2026-11-06; replaces Sundarbans demo scope
 PRODUCTS = [
     {
         "product_id": "MODIS_SP",
@@ -72,6 +75,7 @@ PRODUCTS = [
         "product_id": "VIIRS_SNPP_SP",
         "sensor": "VIIRS",
         "platform": "Suomi-NPP",
+        "available_from": "2012-01-20",
         "processing_level": "Standard (science quality, SP)",
         "collection_version": "VNP14IMGTDL_SP (375 m)",
         "chunk_days": 5,
@@ -84,8 +88,8 @@ PROC_DIR = ROOT / "data" / "processed"
 MANIFESTS = PROC_DIR / "manifests"
 REPORTS = PROC_DIR / "validation"
 EXPECTED_FILES = [
-    RAW_DIR / "MODIS_SP_2024-01-01_2025-12-31_sundarbans-bd.csv",
-    RAW_DIR / "VIIRS_SNPP_SP_2024-01-01_2025-12-31_sundarbans-bd.csv",
+    RAW_DIR / "MODIS_SP_2010-01-01_2026-07-31_bangladesh-bd.csv",
+    RAW_DIR / "VIIRS_SNPP_SP_2010-01-01_2026-07-31_bangladesh-bd.csv",
 ]
 REQUIRED_COLUMNS = ["latitude", "longitude", "acq_date", "acq_time", "confidence", "frp", "daynight"]
 # Brightness is product-specific: MODIS uses 'brightness' (ti4), VIIRS 375m uses 'bright_ti4'
@@ -133,15 +137,19 @@ def check_availability() -> dict:
         report["status"] = "BLOCKED — NASA_FIRMS_MAP_KEY absent; availability API requires a key (HTTP 401 verified 2026-11-06)"
         return report
     for p in PRODUCTS:
-        url = f"{FIRMS_BASE}/api/data_availability/{key}/{p['product_id']}/"
+        url = f"{FIRMS_BASE}/api/data_availability/csv/{key}/{p['product_id']}/"
         try:
             with urllib.request.urlopen(url, timeout=60) as r:
                 body = r.read().decode("utf-8", "replace")
             dates = [d[:10] for d in __import__("re").findall(r"20\d\d-\d\d-\d\d", body)]
-            report["products"][p["product_id"]] = {"status": "ok", "latest_date_in_window_probe": max(dates) if dates else None}
+            if not dates or "invalid map_key" in body.lower():
+                report["products"][p["product_id"]] = {"status": "error: FIRMS did not return valid availability dates"}
+            else:
+                report["products"][p["product_id"]] = {"status": "ok", "latest_date_in_window_probe": max(dates)}
         except Exception as ex:  # noqa: BLE001
-            report["products"][p["product_id"]] = {"status": f"error:{ex}"}
-    report["status"] = "ok"
+            # Exception messages can include request URLs; never log a MAP_KEY.
+            report["products"][p["product_id"]] = {"status": f"error:{type(ex).__name__}"}
+    report["status"] = "ok" if all(p["status"] == "ok" for p in report["products"].values()) else "error"
     return report
 
 
@@ -240,7 +248,7 @@ def write_manifest(run_id: str, path: Path, product: dict, validation: dict, mod
         "sensor": product["sensor"],
         "platform": product["platform"],
         "requested_aoi": AOI,
-        "requested_start_utc": WINDOW["start"],
+        "requested_start_utc": product.get("request_start", WINDOW["start"]),
         "requested_end_utc": WINDOW["end"],
         "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_file": str(path.relative_to(ROOT)),
@@ -280,24 +288,119 @@ def ingest_manual(run_id: str) -> list[Path]:
     return out
 
 
-def ingest_download(run_id: str, key: str) -> list[Path]:
+def _area_url(key, prod_id, bb, days, s) -> str:
+    return (f"{FIRMS_BASE}/api/area/csv/{key}/{prod_id}/"
+            # FIRMS Area API accepts a day range plus its start date; the end
+            # date is implied as start + days - 1. Appending an explicit end
+            # path segment made otherwise valid requests fail with MAP_KEY errors.
+            f"{bb['west']},{bb['south']},{bb['east']},{bb['north']}/{days}/{s}")
+
+
+def _mapkey_usage(key: str) -> tuple[int, int]:
+    """Return current transaction usage and limit without logging the secret URL."""
+    url = f"https://firms.modaps.eosdis.nasa.gov/mapserver/mapkey_status/?MAP_KEY={key}"
+    with urllib.request.urlopen(url, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return int(payload["current_transactions"]), int(payload["transaction_limit"])
+
+
+def _fetch_chunk(args):
+    (url, prod_id, s, e) = args
+    body, status = download_chunk(url)
+    return (prod_id, s, e, body, status)
+
+
+def ingest_download(run_id: str, key: str, workers: int = 8) -> list[Path]:
+    # Download in bounded batches to respect FIRMS' 5000-transaction/10min
+    # key quota. Completed date ranges are checkpointed so a quota or network
+    # interruption can resume without paying for successful requests again.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from datetime import date, timedelta
+    import shutil
+    import time
+
+    def _fetch_range(prod, s, e):
+        """Fetch [s,e] (ISO dates); split to days when FIRMS limits us."""
+        bb = AOI["bbox"]
+        days = (date.fromisoformat(e) - date.fromisoformat(s)).days + 1
+        body, status = download_chunk(_area_url(key, prod['product_id'], bb, min(days, 5) if days else 1, s))
+        if status == "ok":
+            return [(s, e, body)], []
+        if status.startswith("http_400") and b"Exceeding" in body and days > 1:
+            # split into single days and recurse
+            out, errs = [], []
+            cur = date.fromisoformat(s)
+            while cur <= date.fromisoformat(e):
+                ds = cur.isoformat()
+                parts, sub = _fetch_range(prod, ds, ds)
+                out.extend(parts)
+                errs.extend(sub)
+                cur += timedelta(days=1)
+            return out, errs
+        return [], [(s, e, status, body[:200])]
+
     out = []
+    batch_size = 100  # conservative: dense national requests can cost several quota units per day
     for prod in PRODUCTS:
-        target = RAW_DIR / f"{prod['product_id']}_{WINDOW['start']}_{WINDOW['end']}_sundarbans-bd.csv"
+        target = RAW_DIR / f"{prod['product_id']}_{WINDOW['start']}_{WINDOW['end']}_bangladesh-bd.csv"
         if target.exists():
             print(f"  SKIP (exists) {target.name}")
             continue
-        chunks: list[bytes] = []
-        bb = AOI["bbox"]
-        for s, e, days in date_chunks(WINDOW["start"], WINDOW["end"], prod["chunk_days"]):
-            url = (f"{FIRMS_BASE}/api/area/csv/{key}/{prod['product_id']}/"
-                   f"{bb['west']},{bb['south']},{bb['east']},{bb['north']}/{days}/{s}/{e}")
-            body, status = download_chunk(url)
-            if status != "ok":
-                print(f"  ERROR  {prod['product_id']} {s}..{e} -> {status}: {body[:200]!r}")
+        request_start = max(WINDOW["start"], prod.get("available_from", WINDOW["start"]))
+        prod["request_start"] = request_start
+        tasks = [(s, e) for s, e, _ in date_chunks(request_start, WINDOW["end"], prod["chunk_days"])]
+        checkpoint_dir = PROC_DIR / "download_chunks" / prod["product_id"]
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        pending = [(s, e) for s, e in tasks if not (checkpoint_dir / f"{s}_{e}.csv").exists()]
+        print(f"  {prod['product_id']}: {len(tasks)} ranges, {len(tasks)-len(pending)} checkpointed, {workers} workers", flush=True)
+
+        for batch_start in range(0, len(pending), batch_size):
+            batch = pending[batch_start:batch_start + batch_size]
+            errors: list[tuple] = []
+            # FIRMS can charge dense/long requests multiple transactions; use
+            # 3x source-days as a safety margin and still verify live usage.
+            estimated_cost = 3 * sum((date.fromisoformat(e) - date.fromisoformat(s)).days + 1 for s, e in batch)
+            while True:
+                try:
+                    used, limit = _mapkey_usage(key)
+                except Exception:
+                    used, limit = 0, 0
+                if limit and used + estimated_cost <= limit:
+                    break
+                print(f"  FIRMS quota window is at {used}/{limit or 'unknown'} transactions; waiting 10m…", flush=True)
+                time.sleep(610)
+            print(f"  {prod['product_id']}: downloading {batch_start+1}-{batch_start+len(batch)} of {len(pending)} pending ranges", flush=True)
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = {ex.submit(_fetch_range, prod, s, e): (s, e) for s, e in batch}
+                for fut in as_completed(futs):
+                    s, e = futs[fut]
+                    parts, errs = fut.result()
+                    errors.extend(errs)
+                    if errs:
+                        continue
+                    lines_out: list[str] = []
+                    for _, _, body in parts:
+                        lines = body.decode("utf-8", "replace").splitlines()
+                        if lines and lines[0].lower().startswith("latitude"):
+                            if not lines_out:
+                                lines_out.append(lines[0])
+                            lines_out.extend(line for line in lines[1:] if line.strip())
+                        else:
+                            lines_out.extend(line for line in lines if line.strip())
+                    # Header-only is a valid empty day-range response.
+                    atomic_write(checkpoint_dir / f"{s}_{e}.csv", [("\n".join(lines_out) + "\n").encode()])
+            if errors:
+                for s, e, status, preview in sorted(errors)[:5]:
+                    # FIRMS error bodies are safe; never print a request URL or MAP_KEY.
+                    print(f"  ERROR  {prod['product_id']} {s}..{e} -> {status}: {preview!r}", flush=True)
+                print(f"  {len(errors)} range(s) failed. Successful ranges are checkpointed; fix the cause and rerun to resume.", flush=True)
                 return out
-            lines = body.decode("utf-8", "replace").splitlines()
-            if chunks and lines and lines[0].startswith("latitude"):
+
+        chunks: list[bytes] = []
+        for s, e in tasks:
+            path = checkpoint_dir / f"{s}_{e}.csv"
+            lines = path.read_text(encoding="utf-8").splitlines()
+            if chunks and lines and lines[0].lower().startswith("latitude"):
                 chunks.extend((ln + "\n").encode() for ln in lines[1:] if ln.strip())
             else:
                 chunks.extend((ln + "\n").encode() for ln in lines if ln.strip())
@@ -306,6 +409,7 @@ def ingest_download(run_id: str, key: str) -> list[Path]:
         m = write_manifest(run_id, target, prod, v, "firms-api-download")
         print(f"  DOWNLOADED {target.name} rows={v['row_count']} sha256={v['sha256'][:12]}... -> {m.name}")
         out.append(target)
+        shutil.rmtree(checkpoint_dir)
     return out
 
 
@@ -326,7 +430,21 @@ def main() -> int:
                   "Register free at https://firms.modaps.eosdis.nasa.gov/api/map_key/", file=sys.stderr)
             return 2
         avail = check_availability()
-        print(f"Availability check: {avail.get('status')}")
+        print(f"Availability check: {avail.get('status')}", flush=True)
+        if avail.get("status") != "ok":
+            try:
+                used, limit = _mapkey_usage(key)
+            except Exception:
+                used, limit = 0, 0
+            if limit and used + 10 >= limit:
+                print("FIRMS key quota is exhausted; waiting 10m before rechecking…", flush=True)
+                import time
+                time.sleep(610)
+                avail = check_availability()
+                print(f"Availability recheck: {avail.get('status')}", flush=True)
+            if avail.get("status") != "ok":
+                print("ERROR: FIRMS availability could not be verified; check the NASA_FIRMS_MAP_KEY and retry.", file=sys.stderr)
+                return 2
         ingest_download(run_id, key)
     elif args.manual:
         ingest_manual(run_id)

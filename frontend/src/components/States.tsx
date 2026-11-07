@@ -10,7 +10,7 @@ export function ErrorState({ msg, onRetry }: { msg: string; onRetry?: () => void
     <div className="state error" role="alert">
       <p><strong>{isDown ? 'Backend unreachable' : 'Something went wrong'}</strong></p>
       <p>{msg}</p>
-      {isDown && <p>Is the backend running? Set <code className="mono">VITE_API_BASE_URL</code> (default <code className="mono">http://localhost:8000</code>) and retry. The UI will not show fake data.</p>}
+      {isDown && <p>Is the backend running? Set <code className="mono">VITE_API_BASE_URL</code> (local default <code className="mono">http://127.0.0.1:8000</code>) and retry. The UI will not show fake data.</p>}
       {onRetry && <button className="btn ghost" onClick={onRetry}>Retry</button>}
     </div>
   );

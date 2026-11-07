@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from shapely.geometry import box
+
+# Importing backend.app constructs the module-level ASGI app. Keep that
+# construction isolated from a developer's national/demo database by default;
+# an explicitly configured test database still takes precedence.
+os.environ.setdefault("EMBERLENS_DB", ":memory:")
 
 from backend.app import create_app
 from backend.db.database import init_db
@@ -42,6 +48,7 @@ def seeded_db(db):
 
 @pytest.fixture()
 def client(seeded_db, monkeypatch):
+    monkeypatch.setenv("EMBERLENS_AOI_IDS", "demo-aoi")
     app = create_app()
     from backend.api import routes
 

@@ -5,7 +5,7 @@
 
 EMBERLENS is a geospatial fire-intelligence application built around the 2026 NASA Space Apps Challenge, **Harmonization of MODIS and VIIRS Hot Spots**.
 
-Its central product is a scientifically defensible **burning-activity calendar** for a selected area of interest (AOI). The prototype demonstrates the data path on one AOI and a fixed observation window of no more than 24 months. It preserves sensor-specific meaning and provenance; the short window is not presented as a long-term climatology or validated anomaly baseline.
+Its central product is a scientifically defensible **burning-activity calendar** for a selected area of interest (AOI). The current showcase scope is Bangladesh's national bounding box and NASA FIRMS Standard Product observations from 2010-01-01 through 2026-07-31. Sensor-specific meaning and provenance are preserved; historical counts are not presented as a validated anomaly baseline or forecast.
 
 > **Product principle:** The map is the entry point. The calendar and place-level interpretation are the product. The data must remain reusable.
 
@@ -17,24 +17,22 @@ Its central product is a scientifically defensible **burning-activity calendar**
 4. Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the recommended system boundary and stack.
 5. Read [`docs/STATUS.md`](docs/STATUS.md) and [`docs/PROJECT_AUDIT.md`](docs/PROJECT_AUDIT.md) before implementing anything in an existing repository.
 
-## Important: this is a project starter pack, not a claim of completed implementation
+## Current implementation
 
-The folders under `backend/`, `frontend/`, `scripts/`, and `infrastructure/` are intentional implementation locations. This pack does not contain fabricated datasets, API responses, scientific results, model metrics, screenshots, or production-ready code. Do not present an empty scaffold as a working product.
-
-The actual application repository must be audited before choosing what to retain, replace, or build. This Info pack is documentation only. See `docs/PROJECT_AUDIT.md`.
+The repository contains a React/TypeScript + MapLibre frontend and a FastAPI/DuckDB backend. Synthetic fixtures are used by automated tests only. Check `docs/STATUS.md` and `DATA_SOURCE_REGISTER.md` for live source-data and ingestion status before presenting national coverage as complete.
 
 ## Prototype scope and data window
 
-- Use one documented demo AOI and a fixed window of **at most 24 months**. Do not backfill each product to its earliest available date for the prototype.
-- Prefer the latest common source-available window of up to 24 months for the selected products at retrieval time. If the overlap is shorter, use that shorter window and record why. Check for known source-service gaps; source availability is not complete sensor observation coverage.
+- The active demo AOI is the task-specified Bangladesh national bounding box (`bangladesh-bd`), not an authoritative country boundary. The fixed window is **2010-01-01 through 2026-07-31**, inclusive; it uses the common availability ceiling for Standard `MODIS_SP` and `VIIRS_SNPP_SP` products.
+- The national historical range is deliberate for the showcase, rather than a backfill to each product's earliest available date. Record exact dates, product versions, processing levels, retrieval time, and snapshot IDs in each manifest. Do not mix NRT and Standard products to extend the end date.
 - Keep the exact start/end dates, product versions, processing levels, retrieval time, and source snapshot IDs in the manifest so the demo can be reproduced. Do not mix NRT and standard products just to extend the end date.
-- The initial calendar is monthly and sensor/platform-stratified. A two-year slice demonstrates the workflow; it is not enough by itself to support strong climatology, anomaly, or forecasting claims. Keep those features out of the prototype unless separately justified and validated.
+- The calendar is monthly and sensor/platform-stratified over the accepted 2010–2026 snapshot. Returned detection counts are descriptive; the snapshot does not establish valid-pixel opportunity, calibrated cross-sensor equivalence, a validated anomaly baseline, or a forecast.
 - FIRMS date availability or missing-data status describes the source service’s data availability. It does not prove clear-sky observation opportunity or that a zero-row bin means no fire activity. Label such a bin “no source records returned; observation coverage unknown” unless independent coverage evidence supports a stronger statement.
 
 ## Product scope at a glance
 
-- **Prototype P0:** one AOI, a fixed window of at most 24 months, real source snapshots for selected MODIS and VIIRS products, provenance, a monthly sensor/platform-specific calendar, source-observation inspection, and a small metadata-backed export.
-- **After the prototype:** longer historical coverage, climatological baselines, anomaly analysis, additional AOIs, and richer place intelligence. A two-year demo must not be described as a 20-year history or robust seasonal baseline.
+- **Showcase prototype:** Bangladesh national bounding box, 2010–2026 Standard MODIS + VIIRS observations, provenance, a monthly sensor/platform-specific calendar, source-observation inspection, and metadata-backed exports.
+- **Deferred:** validated climatological baselines, anomaly analysis, and predictive outlooks. Long history does not by itself validate those analyses.
 - **Deferred:** hotspot grouping and activity outlooks. These do not block the calendar and must not be described as confirmed incidents or guaranteed predictions.
 
 ## Proposed default stack (subject to repository audit)
@@ -52,13 +50,17 @@ The actual application repository must be audited before choosing what to retain
 
 Do not add Redis, task queues, microservices, Kubernetes, machine learning, or a large analytics stack without an evidenced need.
 
+## Active scope (2026-11-06; ADR-012)
+
+EMBERLENS is now configured for the **Bangladesh national bounding box** (`bangladesh-bd`, W=88.0 S=20.5 E=92.7 N=26.7, EPSG:4326; not an official boundary). The fixed Standard Product window is **2010-01-01 → 2026-07-31** (199 month bins), selected as the common availability ceiling for `MODIS_SP` and `VIIRS_SNPP_SP`; MODIS-only 2026-08 is excluded. This bbox is not a boundary and missing records are still not verified zero activity. The 24-month Sundarbans/prototype sections below are retained as historical context only.
+
 ## Target user journey
 
-1. A user opens the configured demo AOI.
-2. EMBERLENS shows selected MODIS/VIIRS products and the fixed demo window (at most 24 months), with source-data availability notes.
-3. The user chooses a time span within the fixed demo window and a sensor/platform view.
+1. A user opens the Bangladesh national bounding-box view.
+2. EMBERLENS shows selected MODIS/VIIRS products and the fixed 2010–2026 window, with source-data availability notes.
+3. The user chooses a time span within the fixed window and a sensor/platform view.
 4. The monthly burning-activity calendar shows returned detections and source-data gaps, with sensor context visible.
-5. The user opens a calendar month or map point to inspect the source observations and provenance. The prototype does not label a period anomalous based only on two years of data.
+5. The user opens a calendar month or map point to inspect the source observations and provenance. The prototype does not label a period anomalous without a separately validated baseline.
 6. The user exports observations or derived data with complete metadata and provenance.
 
 ## Scientific guardrails
@@ -104,8 +106,8 @@ Always re-check live product availability, product versions, endpoint limits, an
 
 ## Document authority
 
-Use `CLAUDE.md` for execution rules, `docs/PRD.md` for current product scope, `docs/SCIENTIFIC_METHODOLOGY.md` for scientific behavior, and `docs/DECISIONS.md` for accepted choices. Earlier pasted handoff prose and mockups are design context only where they agree with these documents; the calendar-first, 24-month prototype scope takes precedence.
+Use `CLAUDE.md` for execution rules, `docs/PRD.md` for current product scope, `docs/SCIENTIFIC_METHODOLOGY.md` for scientific behavior, and `docs/DECISIONS.md` for accepted choices. ADR-012 supersedes earlier 24-month guidance and sets the current Bangladesh 2010–2026 snapshot. Earlier handoff prose and mockups are design context only where they agree with the accepted decision.
 
 ## First instruction to the coding agent
 
-Audit the actual application repository and its data first; this Info pack contains no implementation. Then build the smallest complete path from a real source record to a validated monthly calendar cell and metadata-backed export for one AOI and no more than 24 months. Do not backfill the full sensor archives. Refine the interface after this path is reproducible.
+Audit the actual application repository and its data first. The current implementation uses the frozen national snapshot recorded in ADR-012; do not backfill earlier product history or extend the product set without an accepted decision. Keep the path from source record through validated monthly calendar cell to metadata-backed export reproducible.

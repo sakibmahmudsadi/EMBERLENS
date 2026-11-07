@@ -1,8 +1,10 @@
+> **Scope superseded 2026-11-06 (ADR-012):** the active configuration is Bangladesh national bbox (`bangladesh-bd`), Standard `MODIS_SP` + `VIIRS_SNPP_SP`, fixed window 2010-01-01 → 2026-07-31. “24-month prototype” below is historical and must not be used as current scope; the national bbox is not an authoritative boundary and missing records are not verified zero detections. See `docs/DECISIONS.md` ADR-012 and `DATA_SOURCE_REGISTER.md` §10.
+
 # Data Pipeline and Ingestion Specification
 
 ## 1. Goal
 
-Create a repeatable, auditable pipeline for one documented demo AOI and a fixed observation window of at most 24 months. Validate the selected NASA FIRMS products, preserve raw sources, and produce canonical observations and a monthly sensor-specific calendar. Do not ingest each product's full history for the prototype.
+Create a repeatable, auditable pipeline for the registered Bangladesh bbox and frozen 2010-01-01–2026-07-31 Standard-product snapshot. Validate selected NASA FIRMS products, preserve raw sources, and produce canonical observations and a monthly sensor-specific calendar. Current loaded snapshots and remaining pipeline gaps are recorded in `docs/STATUS.md` and `docs/SOURCE_DATA_COVERAGE_REPORT.md`.
 
 ## 2. Source selection
 
@@ -18,7 +20,7 @@ Sources to evaluate:
 
 Candidate initial products include MODIS Collection 6.1 and VIIRS 375 m products for Suomi-NPP, NOAA-20, and NOAA-21 where the selected AOI/date range is available. Confirm exact product identifiers and versions against the current FIRMS service at implementation time.
 
-Do not hardcode product start/end dates as permanent truths. Query product availability and inspect the actual archive metadata. Select the latest common source-available window up to 24 months for the chosen products; if their overlap is shorter, use that shorter window and record why. Check known source-service gaps and report them separately from sensor observation opportunity. Freeze exact dates in the manifest. Product-date availability is not proof of clear-sky observation coverage.
+The currently registered snapshot is frozen by ADR-012 at 2010-01-01 through 2026-07-31 for `MODIS_SP` and `VIIRS_SNPP_SP`. Do not apply the superseded 24-month prototype cap or silently change the registered dates. For a future re-freeze, query product availability and inspect archive metadata, choose a documented common Standard-product window, and record the decision and exact dates in the manifest. Product-date availability is not proof of clear-sky observation coverage.
 
 ### Standard versus NRT
 
@@ -28,8 +30,8 @@ For historical/scientific analysis, prefer standard science-quality products whe
 
 ### Historical ingestion
 
-- Use the FIRMS archive workflow for the fixed demo period; do not request the full archive back to product start dates.
-- Restrict downloads to the required AOI/product/date range, capped at 24 months.
+- Use the registered FIRMS Area API workflow for the national prototype snapshot; do not request the full archive back to product start dates.
+- Restrict downloads to the exact registered AOI, products, and dates. A new date window or sensor requires an explicit scope/register update.
 - Partition retrievals by product and manageable time windows.
 - Preserve the original downloaded artifact and checksum.
 - Store the exact archive request or selection metadata.
@@ -119,7 +121,7 @@ Never overwrite one stage with another. Every stage includes run ID and method/m
 
 ## 8. Recommended demo-data strategy
 
-Start with one bounded AOI in Bangladesh, potentially the Sundarbans, only after confirming useful coverage for both selected product families. Use a fixed period of at most 24 months, preferably the latest common source-available standard-data period when the snapshot is taken. Keep the source snapshot frozen for the demo and preserve its manifest/checksum; keep large raw files outside Git and commit only small reviewed fixtures. Do not add a second AOI or expand globally before the source-to-calendar slice is complete.
+Current prototype data is the one Bangladesh task-specified national bounding box and the frozen 2010-01-01–2026-07-31 Standard-product snapshot defined by ADR-012. The Sundarbans and 24-month strategy below are superseded historical planning, not current ingestion instructions. Keep the source snapshot frozen and preserve its manifest/checksum; keep large raw files outside Git and commit only small reviewed fixtures. Any boundary, product, or date-window change needs a documented scope decision and validation rerun.
 
 ## 9. Reconciliation and reprocessing
 

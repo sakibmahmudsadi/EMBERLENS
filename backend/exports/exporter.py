@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -50,6 +51,7 @@ def build_manifest(
         "source_snapshots": snapshots or [],
         "method_version": method_version,
         "normalization_version": normalization_version,
+        "code_revision": os.environ.get("EMBERLENS_GIT_COMMIT"),
         "crs": "EPSG:4326",
         "units": {
             "coordinates": "decimal degrees (longitude, latitude)",
@@ -73,13 +75,15 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
-def to_csv(rows: list[dict[str, Any]]) -> str:
-    if not rows:
+def to_csv(rows: list[dict[str, Any]], fieldnames: list[str] | None = None) -> str:
+    # D-06 fix: empty result sets still emit a header row so the manifest is
+    # never lost (previously 200 + zero bytes, indistinguishable from breakage).
+    if not rows and not fieldnames:
         return ""
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    writer = csv.DictWriter(buf, fieldnames=fieldnames or list(rows[0].keys()))
     writer.writeheader()
-    for r in rows:
+    for r in rows or []:
         writer.writerow({k: _jsonable(v) for k, v in r.items()})
     return buf.getvalue()
 

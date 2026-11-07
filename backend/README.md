@@ -13,22 +13,26 @@ unknown", never "no fires".
 ```bash
 cd backend
 python -m venv .venv
-.venv/Scripts/python -m pip install -e .   # or: pip install -r requirements
+.venv/Scripts/python -m pip install -r requirements-prod.txt
+.venv/Scripts/python -m pip install pytest==9.2.0 ruff==0.17.4
 ```
 
-Dependencies are pinned in `backend/pyproject.toml`
-(fastapi, uvicorn, pydantic>=2, duckdb, polars, shapely, pytest, httpx, ruff).
+Runtime dependencies are pinned in `requirements-prod.txt` and mirrored in
+`pyproject.toml`. The backend directory contains multiple import packages, so
+run modules from the repository root rather than installing it as one package.
 
 ## Run
 
 ```bash
-cd "W:/Pipeline/Nasa Space App Challenge"   # project root
-EMBERLENS_DB=backend/emberlens.duckdb \
-  backend/.venv/Scripts/python -m uvicorn backend.app:app --reload
+cd "W:/Pipeline/Nasa Space App Challenge"   # project root, PowerShell
+$env:EMBERLENS_DB = "backend/emberlens-bangladesh.duckdb"
+backend/.venv/Scripts/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Env: `FRONTEND_ORIGIN` (CORS, default `http://localhost:5173`),
-`DATA_ROOT` (default `data/`), `EMBERLENS_DB` (DuckDB path).
+The frontend dev server proxies `/api` to `http://127.0.0.1:8000` by default.
+Set `VITE_API_PROXY_TARGET` if the API is on another port. Env: `FRONTEND_ORIGINS`
+(CORS allowlist), `DATA_ROOT` (default `data/`), `EMBERLENS_DB` (DuckDB path),
+and `EMBERLENS_AOI_IDS` (comma-separated AOI allowlist; defaults to `bangladesh-bd`).
 
 ## Seed from local CSVs
 
@@ -65,12 +69,15 @@ should call the same canonical mapping + store functions.
 
 ```bash
 cd backend
-.venv/Scripts/python -m pytest -q    # 38 tests, all synthetic data
+.venv/Scripts/python -m pytest -q    # all tests use synthetic fixtures
 .venv/Scripts/python -m ruff check .
 ```
 
 All fixtures under `tests/fixtures/SYNTHETIC_NOT_NASA_DATA/` are hand-made —
-**not NASA data**.
+**not NASA data**. The test configuration sets the import-time app database to
+`:memory:` by default so the suite can run while a local API has the national
+DuckDB open. Set `EMBERLENS_DB` explicitly only when you intend the import-time
+app to use a separate test database.
 
 ## Calendar contract
 

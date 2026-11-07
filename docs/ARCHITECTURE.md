@@ -1,10 +1,12 @@
+> **Scope superseded 2026-11-06 (ADR-012):** the active configuration is Bangladesh national bbox (`bangladesh-bd`), Standard `MODIS_SP` + `VIIRS_SNPP_SP`, fixed window 2010-01-01 → 2026-07-31. “24-month prototype” below is historical and must not be used as current scope; the national bbox is not an authoritative boundary and missing records are not verified zero detections. See `docs/DECISIONS.md` ADR-012 and `DATA_SOURCE_REGISTER.md` §10.
+
 # System Architecture
 
 **Status:** Recommended target architecture; confirm against the actual repository before implementation.
 
 ## 1. Architecture objective
 
-Deliver one reproducible path from NASA FIRMS records to a user-facing burning-activity calendar, while retaining original observations, source provenance, sensor-specific measurement meaning, and exportability. The competition prototype is limited to one AOI and a fixed source window of at most 24 months.
+Deliver one reproducible path from NASA FIRMS records to a user-facing burning-activity calendar, while retaining original observations, source provenance, sensor-specific measurement meaning, and exportability. Current prototype scope is one task-specified Bangladesh bbox and the frozen 2010-01-01–2026-07-31 Standard-product snapshot; see `docs/STATUS.md` for implemented capabilities and remaining gaps.
 
 Use a **modular monolith** initially. The scientific pipeline, API, and frontend should have clear boundaries, but separate deployable services are not justified until scale or team ownership requires them.
 

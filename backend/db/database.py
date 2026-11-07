@@ -117,6 +117,20 @@ class Database:
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
         self.conn = duckdb.connect(self.path)
+        # DuckDB python connections are NOT safe for concurrent execute from
+        # multiple threads (FastAPI threadpool). Serialize all access so
+        # concurrent requests (observations+calendar+coverage from the same
+        # page load, or two tabs) cannot hit "connection is busy".
+        import threading
+
+        # A regular Lock can be released by a different thread. FastAPI runs
+        # sync dependency setup/teardown on worker threads that may differ,
+        # while an RLock raises "cannot release un-acquired lock" there.
+        self._lock = threading.Lock()
+
+    def _locked(self, fn, *args, **kwargs):
+        with self._lock:
+            return fn(*args, **kwargs)
 
     def close(self) -> None:
         self.conn.close()
@@ -128,8 +142,10 @@ class Database:
     def insert_snapshot(self, row: dict[str, Any]) -> None:
         cols = list(row)
         ph = ",".join("?" for _ in cols)
+        updates = ",".join(f"{c}=excluded.{c}" for c in cols if c != "source_snapshot_id")
         self.conn.execute(
-            f"INSERT INTO source_snapshot ({','.join(cols)}) VALUES ({ph})",
+            f"INSERT INTO source_snapshot ({','.join(cols)}) VALUES ({ph}) "
+            f"ON CONFLICT (source_snapshot_id) DO UPDATE SET {updates}",
             [row[c] for c in cols],
         )
 
@@ -214,9 +230,11 @@ class Database:
         cols = [d[0] for d in self.conn.description]
         return [dict(zip(cols, r)) for r in rows]
 
-    def query_observations(self, *, sensors=None, platforms=None, products=None,
+    def query_observations(self, *, sensors=None, platforms=None, products=None, aoi_geometry=None,
                            start=None, end=None, page=1, page_size=100,
-                           include_native: bool = False) -> tuple[list[dict[str, Any]], int]:
+                           include_native: bool = False, min_frp_native=None,
+                           daynight=None, min_modis_confidence=None,
+                           viirs_confidence_classes=None) -> tuple[list[dict[str, Any]], int]:
         where, params = [], []
         if sensors:
             where.append(f"sensor IN ({','.join('?' for _ in sensors)})")
@@ -233,6 +251,25 @@ class Database:
         if end:
             where.append("acquired_at_utc < ?")
             params.append(end)
+        if min_frp_native is not None:
+            where.append("frp_native >= ?")
+            params.append(min_frp_native)
+        if daynight:
+            where.append("upper(trim(daynight_native)) = ?")
+            params.append(daynight.upper())
+        if min_modis_confidence is not None:
+            where.append("(sensor <> 'MODIS' OR try_cast(confidence_raw AS DOUBLE) >= ?)")
+            params.append(min_modis_confidence)
+        if viirs_confidence_classes:
+            where.append(f"(sensor <> 'VIIRS' OR upper(trim(confidence_class_native)) IN ({','.join('?' for _ in viirs_confidence_classes)}))")
+            params.extend([value.upper() for value in viirs_confidence_classes])
+        # Active prototype AOI is an explicitly registered rectangle/bbox.
+        # Applying its bounds in SQL keeps feed and export counts spatially
+        # consistent with the calendar without materializing the full table.
+        if aoi_geometry is not None:
+            min_lon, min_lat, max_lon, max_lat = aoi_geometry.bounds
+            where.extend(("longitude >= ?", "longitude <= ?", "latitude >= ?", "latitude <= ?"))
+            params.extend((min_lon, max_lon, min_lat, max_lat))
         clause = ("WHERE " + " AND ".join(where)) if where else ""
         total = self.conn.execute(f"SELECT count(*) FROM fire_observation {clause}", params).fetchone()[0]
         page = max(1, page)
@@ -251,6 +288,69 @@ class Database:
             out.append(d)
         return out, total
 
+    def query_map_density(self, *, aoi_geometry, start, end, grid_degrees=0.08,
+                          sensors=None, platforms=None, products=None,
+                          min_frp_native=None, daynight=None, min_modis_confidence=None,
+                          viirs_confidence_classes=None) -> list[dict[str, Any]]:
+        """Aggregate source rows into geographic cells, retaining each series separately."""
+        if not 0.02 <= grid_degrees <= 0.5:
+            raise ValueError("grid_degrees must be between 0.02 and 0.5")
+        where, params = [], []
+        if sensors:
+            where.append(f"sensor IN ({','.join('?' for _ in sensors)})")
+            params.extend(sensors)
+        if platforms:
+            where.append(f"platform IN ({','.join('?' for _ in platforms)})")
+            params.extend(platforms)
+        if products:
+            where.append(f"product_id IN ({','.join('?' for _ in products)})")
+            params.extend(products)
+        if start:
+            where.append("acquired_at_utc >= ?")
+            params.append(start)
+        if end:
+            where.append("acquired_at_utc < ?")
+            params.append(end)
+        if min_frp_native is not None:
+            where.append("frp_native >= ?")
+            params.append(min_frp_native)
+        if daynight:
+            where.append("upper(trim(daynight_native)) = ?")
+            params.append(daynight.upper())
+        if min_modis_confidence is not None:
+            where.append("(sensor <> 'MODIS' OR try_cast(confidence_raw AS DOUBLE) >= ?)")
+            params.append(min_modis_confidence)
+        if viirs_confidence_classes:
+            where.append(f"(sensor <> 'VIIRS' OR upper(trim(confidence_class_native)) IN ({','.join('?' for _ in viirs_confidence_classes)}))")
+            params.extend([value.upper() for value in viirs_confidence_classes])
+        if aoi_geometry is not None:
+            min_lon, min_lat, max_lon, max_lat = aoi_geometry.bounds
+            where.extend(("longitude >= ?", "longitude <= ?", "latitude >= ?", "latitude <= ?"))
+            params.extend((min_lon, max_lon, min_lat, max_lat))
+        clause = ("WHERE " + " AND ".join(where)) if where else ""
+        lat_cell = "floor(latitude / ?) * ? + ? / 2"
+        lon_cell = "floor(longitude / ?) * ? + ? / 2"
+        grid_params = [grid_degrees, grid_degrees, grid_degrees,
+                       grid_degrees, grid_degrees, grid_degrees]
+        rows = self.conn.execute(
+            f"SELECT {lat_cell} AS cell_latitude, {lon_cell} AS cell_longitude, "
+            f"sensor, platform, product_id, count(*) AS observation_count "
+            f"FROM fire_observation {clause} "
+            "GROUP BY cell_latitude, cell_longitude, sensor, platform, product_id "
+            "ORDER BY cell_latitude, cell_longitude, sensor, platform, product_id",
+            grid_params + params,
+        ).fetchall()
+        cells: dict[tuple[float, float], dict[str, Any]] = {}
+        for lat, lon, sensor, platform, product_id, count in rows:
+            key = (round(float(lat), 6), round(float(lon), 6))
+            cell = cells.setdefault(key, {"latitude": key[0], "longitude": key[1], "series": [], "max_series_count": 0})
+            cell["series"].append({
+                "sensor": sensor, "platform": platform, "product_id": product_id,
+                "observation_count": count,
+            })
+            cell["max_series_count"] = max(cell["max_series_count"], count)
+        return list(cells.values())
+
     def get_observation(self, observation_id: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT * FROM fire_observation WHERE observation_id=?", [observation_id]).fetchone()
         if not row:
@@ -260,17 +360,103 @@ class Database:
 
     def observations_for_calendar(self) -> list[dict[str, Any]]:
         rows = self.conn.execute(
-            "SELECT sensor, platform, product_id, latitude, longitude, acquired_at_utc, source_snapshot_id"
+            "SELECT sensor, platform, product_id, latitude, longitude, acquired_at_utc, source_snapshot_id,"
+            " frp_native, frp_mw, confidence_raw, confidence_class_native, daynight_native"
             " FROM fire_observation ORDER BY acquired_at_utc"
         ).fetchall()
         cols = [d[0] for d in self.conn.description]
         return [dict(zip(cols, r)) for r in rows]
 
-    def list_calendar(self, aoi_id: str) -> list[dict[str, Any]]:
+    def query_observation_month_counts(
+        self, *, aoi_geometry, start, end, sensors=None, platforms=None, products=None,
+        min_frp_native=None, daynight=None, min_modis_confidence=None,
+        viirs_confidence_classes=None,
+    ) -> list[dict[str, Any]]:
+        """Count rows in DuckDB for a rectangular AOI, retaining series provenance.
+
+        This avoids materializing the national observation table in Python for
+        the common calendar query. Non-rectangular AOIs use the exact Shapely
+        fallback in the calendar service.
+        """
+        where, params = [], []
+        for column, values in (("sensor", sensors), ("platform", platforms), ("product_id", products)):
+            if values:
+                where.append(f"{column} IN ({','.join('?' for _ in values)})")
+                params.extend(values)
+        if start is not None:
+            where.append("acquired_at_utc >= ?")
+            params.append(start)
+        if end is not None:
+            where.append("acquired_at_utc < ?")
+            params.append(end)
+        if min_frp_native is not None:
+            where.append("frp_native >= ?")
+            params.append(min_frp_native)
+        if daynight:
+            where.append("upper(trim(daynight_native)) = ?")
+            params.append(daynight.upper())
+        if min_modis_confidence is not None:
+            where.append("(sensor <> 'MODIS' OR try_cast(confidence_raw AS DOUBLE) >= ?)")
+            params.append(min_modis_confidence)
+        if viirs_confidence_classes:
+            where.append(
+                f"(sensor <> 'VIIRS' OR upper(trim(confidence_class_native)) IN "
+                f"({','.join('?' for _ in viirs_confidence_classes)}))"
+            )
+            params.extend(value.upper() for value in viirs_confidence_classes)
+        min_lon, min_lat, max_lon, max_lat = aoi_geometry.bounds
+        where.extend(("longitude >= ?", "longitude <= ?", "latitude >= ?", "latitude <= ?"))
+        params.extend((min_lon, max_lon, min_lat, max_lat))
         rows = self.conn.execute(
-            "SELECT * FROM calendar_aggregate WHERE aoi_id=? ORDER BY sensor, platform, period_start_utc",
-            [aoi_id],
+            "SELECT sensor, platform, product_id, date_trunc('month', acquired_at_utc) AS period_start_utc, "
+            "count(*) AS observation_count, list(DISTINCT source_snapshot_id) AS source_snapshot_ids "
+            "FROM fire_observation WHERE " + " AND ".join(where) + " "
+            "GROUP BY sensor, platform, product_id, period_start_utc "
+            "ORDER BY sensor, platform, product_id, period_start_utc",
+            params,
         ).fetchall()
+        return [
+            {
+                "sensor": sensor,
+                "platform": platform,
+                "product_id": product_id,
+                "period_start_utc": period_start,
+                "observation_count": count,
+                "source_snapshot_ids": snapshots or [],
+            }
+            for sensor, platform, product_id, period_start, count, snapshots in rows
+        ]
+
+    def list_calendar(
+        self,
+        aoi_id: str,
+        start: Any | None = None,
+        end: Any | None = None,
+        sensors: list[str] | None = None,
+        platforms: list[str] | None = None,
+        products: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        # D-08 fix: SQL-side filtering so exports honor the requested window
+        # and sensor/platform/product scope instead of leaking all aggregates.
+        q = "SELECT * FROM calendar_aggregate WHERE aoi_id=?"
+        args: list[Any] = [aoi_id]
+        if start is not None:
+            q += " AND period_start_utc >= ?"
+            args.append(start)
+        if end is not None:
+            q += " AND period_start_utc < ?"
+            args.append(end)
+        if sensors:
+            q += f" AND sensor IN ({','.join('?' for _ in sensors)})"
+            args.extend(sensors)
+        if platforms:
+            q += f" AND platform IN ({','.join('?' for _ in platforms)})"
+            args.extend(platforms)
+        if products:
+            q += f" AND product_id IN ({','.join('?' for _ in products)})"
+            args.extend(products)
+        q += " ORDER BY sensor, platform, period_start_utc"
+        rows = self.conn.execute(q, args).fetchall()
         cols = [d[0] for d in self.conn.description]
         return [dict(zip(cols, r)) for r in rows]
 

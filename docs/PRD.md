@@ -1,3 +1,5 @@
+> **Scope superseded 2026-11-06 (ADR-012):** the active configuration is Bangladesh national bbox (`bangladesh-bd`), Standard `MODIS_SP` + `VIIRS_SNPP_SP`, fixed window 2010-01-01 → 2026-07-31. “24-month prototype” below is historical and must not be used as current scope; the national bbox is not an authoritative boundary and missing records are not verified zero detections. See `docs/DECISIONS.md` ADR-012 and `DATA_SOURCE_REGISTER.md` §10.
+
 # Product Requirements Document (PRD)
 
 **Product:** EMBERLENS  
@@ -6,7 +8,7 @@
 
 ## 1. Product summary
 
-EMBERLENS turns NASA active-fire observations into a sensor-aware burning-activity calendar for a selected area of interest (AOI). The prototype demonstrates the workflow on one AOI and a fixed observation window of at most 24 months. It preserves sensor-specific meaning and provenance; this bounded slice is not presented as a complete historical record, robust climatology, or validated anomaly baseline. It helps users answer:
+EMBERLENS turns NASA active-fire observations into a sensor-aware burning-activity calendar for a selected area of interest (AOI). The current prototype demonstrates the workflow on the task-specified Bangladesh bounding box and a fixed 2010-01-01–2026-07-31 source snapshot. It preserves sensor-specific meaning and provenance; this finite snapshot is not presented as a complete historical record, robust climatology, or validated anomaly baseline. It helps users answer:
 
 - **Where?** Which parts of the AOI contain recorded active-fire detections?
 - **When?** How is detected activity distributed across dates, months, seasons, and years?
@@ -50,15 +52,15 @@ EMBERLENS will preserve the distinctions in the source data while creating a com
 
 ### Prototype data window
 
-- The first demonstrator uses one AOI and no more than **24 months** of observations. Do not backfill each sensor to its earliest product date.
-- Prefer the latest common source-available window for the selected products at retrieval time. If the overlap is shorter than 24 months, use that shorter window and explain why. Check and report known source-service gaps; source availability is not complete sensor observation coverage.
+- Current demonstrator uses the single registered Bangladesh bbox and the frozen **2010-01-01–2026-07-31** source snapshot. Do not silently change the AOI or extend the product set.
+- MODIS_SP begins in 2010; VIIRS_SNPP_SP begins at its registered availability on 2012-01-20. The shared end is capped at 2026-07-31. Known FIRMS missing source dates are reported separately; availability is not complete sensor observation coverage.
 - Freeze the exact start/end dates, product versions, processing levels, and source snapshots in the run manifest. Do not mix NRT and standard products just to extend the date range.
-- Use a monthly calendar, stratified by sensor/platform/product. The two-year window demonstrates the product; it does not support strong long-term seasonality, anomaly, or forecast claims by itself. Those analyses remain deferred unless supported by additional reference data and validation.
+- Use a monthly calendar, stratified by sensor/platform/product. This finite snapshot does not establish a validated climatology, anomaly method, or forecast; those analyses require explicit methods and validation.
 
 ## 5. Scope and priority
 
 ### P0 — Required for a defensible challenge submission
-- Real NASA FIRMS MODIS and VIIRS source data for one documented AOI and a fixed window of at most 24 months.
+- Real NASA FIRMS MODIS and VIIRS source data for the registered Bangladesh AOI and frozen 2010–2026 window.
 - Ingestion manifest, raw file preservation, product/version metadata, and data-quality report.
 - Common source-preserving observation schema.
 - Sensor-aware filters and coverage display.
@@ -96,7 +98,7 @@ EMBERLENS will preserve the distinctions in the source data while creating a com
 
 ### Journey A — Explore the demo AOI
 1. Open the map with the configured demo AOI.
-2. See AOI geometry, the fixed date range (no more than 24 months), sensor/product availability, and source-status caveats.
+2. See AOI geometry, the frozen date range, sensor/product availability, and source-status caveats.
 3. Open the monthly burning calendar.
 4. Select a cell or period to inspect returned detections and their contributing sensor/platform.
 
@@ -181,6 +183,6 @@ Do not invent numeric performance, impact, or accuracy targets. Establish them a
 - Which exact FIRMS products and processing collections are available for each demo period?
 - Does the existing dataset use standard science-quality or NRT records, and are product versions mixed?
 - Which AOI produces the strongest scientifically defensible demonstration?
-- Which exact demo AOI, boundary source, products, and latest common source-data window of at most 24 months will be used? Here, source-data availability does not imply observation completeness.
+- The active AOI, boundary source, products, and frozen common source-data window are recorded in ADR-012 and the data source register. Source-data availability does not imply observation completeness.
 - Which cross-sensor comparison can be supported by overlap-period evidence? A fused value is out of prototype scope unless validated.
 - What deployment environment and data volume are realistically available to the team?

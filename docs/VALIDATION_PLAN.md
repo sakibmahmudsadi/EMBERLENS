@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Validation determines whether EMBERLENS is technically correct, scientifically defensible, and useful for the 2026 challenge. A passing unit-test suite alone does not validate the scientific interpretation. The first prototype uses one AOI and no more than 24 months of fixed source data; it demonstrates a workflow and does not establish a long-term climatology or robust anomaly baseline.
+Validation determines whether EMBERLENS is technically correct, scientifically defensible, and useful for the 2026 challenge. A passing unit-test suite alone does not validate the scientific interpretation. The active prototype uses one task-specified Bangladesh bounding box and the fixed 2010-01-01–2026-07-31 source snapshot; it does not establish a complete historical record or robust anomaly baseline.
 
 ## 2. Validation layers
 
@@ -145,7 +145,7 @@ If outputs differ due to nondeterministic behavior or source revision, explain a
 
 Must pass:
 - P0 source ingestion and provenance;
-- P0 monthly calendar correctness and source-status semantics for the fixed window of at most 24 months;
+- P0 monthly calendar correctness and source-status semantics for the fixed 2010–2026 window;
 - sensor distinctions and methodological disclosure;
 - export metadata and consistency;
 - application starts reliably from documented steps;

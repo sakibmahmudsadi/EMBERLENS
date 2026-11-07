@@ -3,6 +3,23 @@ import type { ObservationDetail as Detail } from '../lib/types';
 import { Loading, ErrorState, Empty } from '../components/States';
 import { useEffect, useState } from 'react';
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Preserve the detail panel when older APIs return malformed native JSON.
+    }
+  }
+  return {};
+}
+
 export function ObservationDetailPanel({ id }: { id: string | null }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [err, setErr] = useState('');
@@ -20,7 +37,7 @@ export function ObservationDetailPanel({ id }: { id: string | null }) {
   if (!detail) return <section className="panel"><h2>Observation detail</h2><Empty /></section>;
 
   const frp = detail.frp_mw ?? detail.frp_native;
-  const native = { ...((detail.native_fields as Record<string, unknown>) ?? {}), ...((detail.source_attributes as Record<string, unknown>) ?? {}) };
+  const native = { ...asRecord(detail.native_fields), ...asRecord(detail.source_attributes) };
   const keys = Object.keys(native);
 
   return (
@@ -29,7 +46,7 @@ export function ObservationDetailPanel({ id }: { id: string | null }) {
       <dl className="kv">
         <dt>ID</dt><dd className="mono">{detail.observation_id}</dd>
         <dt>Sensor / platform</dt><dd>{detail.sensor} · {detail.platform}</dd>
-        <dt>Product</dt><dd>{detail.product_id} {detail.collection_version ? `(v{detail.collection_version})` : ''}</dd>
+        <dt>Product</dt><dd>{detail.product_id}{detail.collection_version ? ` · ${detail.collection_version}` : ''}</dd>
         <dt>Acquired (UTC)</dt><dd>{detail.acquired_at_utc}</dd>
         <dt>Location</dt><dd>{detail.latitude}, {detail.longitude}</dd>
         <dt>Confidence</dt><dd>Raw: <code className="mono">{String(detail.confidence_raw ?? '—')}</code> · Semantics: {detail.confidence_semantics}</dd>

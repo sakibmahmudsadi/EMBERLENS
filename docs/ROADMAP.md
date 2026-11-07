@@ -1,6 +1,8 @@
+> **Scope superseded 2026-11-06 (ADR-012):** the active configuration is Bangladesh national bbox (`bangladesh-bd`), Standard `MODIS_SP` + `VIIRS_SNPP_SP`, fixed window 2010-01-01 → 2026-07-31. “24-month prototype” below is historical and must not be used as current scope; the national bbox is not an authoritative boundary and missing records are not verified zero detections. See `docs/DECISIONS.md` ADR-012 and `DATA_SOURCE_REGISTER.md` §10.
+
 # Roadmap and Milestone Gates
 
-Roadmap order is deliberate: prove data correctness before building broad analytics or polishing the interface. The immediate workback below is a proposed plan for the 2026 hackathon dates; the team should assign named owners and adjust it to its actual repository and capacity. The prototype is capped at one AOI and a fixed period of at most 24 months.
+Roadmap order is deliberate: prove data correctness before building broad analytics or polishing the interface. The dated workback below is the original plan for the 2026 hackathon; current repository status is in `docs/STATUS.md`. Current prototype scope is one Bangladesh task-specified bbox and the registered 2010-01-01–2026-07-31 snapshot, not the historical 24-month starter target.
 
 ## Prototype workback — November 5–15, 2026
 
@@ -15,7 +17,7 @@ The official challenge page lists the global hackathon on November 14–15 and p
 | Nov 13 | Freeze demo snapshot and feature scope; resolve blockers; rehearse | Clean reproducible demo, known limitations, backup recording/screenshots |
 | Nov 14–15 | Build only the remaining competition-critical gaps, prepare narrative, and submit | Working prototype and submission completed before the local deadline |
 
-Do not start baseline/anomaly work, event clustering, multi-AOI support, or forecast work while the source-to-calendar path is incomplete. After the hackathon, continue with the maturity gates below as time allows.
+The source-to-calendar path is now implemented for the frozen national snapshot. The maturity gates below remain future work where the current status identifies a gap. Forecast work remains optional and must never be presented as guaranteed wildfire prediction.
 
 ## M0 — Repository and data reconnaissance
 
