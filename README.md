@@ -19,7 +19,7 @@ Its central product is a scientifically defensible **burning-activity calendar**
 
 ## Current implementation
 
-The repository contains a React/TypeScript + MapLibre frontend and a FastAPI/DuckDB backend. Synthetic fixtures are used by automated tests only. Check `docs/STATUS.md` and `DATA_SOURCE_REGISTER.md` for live source-data and ingestion status before presenting national coverage as complete.
+The repository contains a React/TypeScript + MapLibre frontend and a FastAPI/DuckDB backend. The local demo supports national and map-view subarea queries, sensor-aware monthly history, annual map playback, descriptive same-month comparisons, observation inspection, and experimental hotspot grouping. Synthetic fixtures are used by automated tests only. Check `docs/STATUS.md` and `DATA_SOURCE_REGISTER.md` for live source-data and ingestion status before presenting national coverage as complete.
 
 ## Prototype scope and data window
 
@@ -31,9 +31,10 @@ The repository contains a React/TypeScript + MapLibre frontend and a FastAPI/Duc
 
 ## Product scope at a glance
 
-- **Showcase prototype:** Bangladesh national bounding box, 2010–2026 Standard MODIS + VIIRS observations, provenance, a monthly sensor/platform-specific calendar, source-observation inspection, and metadata-backed exports.
+- **Showcase prototype:** Bangladesh national bounding box and map-view subareas within it, 2010–2026 Standard MODIS + VIIRS observations, provenance, a monthly sensor/platform-specific calendar, historical playback, source-observation inspection, and metadata-backed exports.
 - **Deferred:** validated climatological baselines, anomaly analysis, and predictive outlooks. Long history does not by itself validate those analyses.
-- **Deferred:** hotspot grouping and activity outlooks. These do not block the calendar and must not be described as confirmed incidents or guaranteed predictions.
+- **Experimental:** sensor-separated algorithmic hotspot grouping with configurable distance/time gap. Groups are not confirmed incidents and remain subject to sensitivity/domain evaluation.
+- **Deferred:** guaranteed wildfire prediction or validated outlooks. Returned-detection history is not an observation-opportunity-adjusted forecast.
 
 ## Proposed default stack (subject to repository audit)
 
@@ -46,7 +47,7 @@ The repository contains a React/TypeScript + MapLibre frontend and a FastAPI/Duc
 | Frontend | React + TypeScript + Vite | Fast iteration and a maintainable interactive app |
 | Map | MapLibre GL JS | Real vector map and independently managed observation layers |
 | Charts | A small, accessible chart library | Calendar and trend views, not decorative dashboards |
-| Local infrastructure | Docker Compose when useful | Repeatable database and service setup |
+| Local infrastructure | Native Windows scripts (`start_emberlens.ps1` / `stop_emberlens.ps1`) | One-command local startup for the competition presentation |
 
 Do not add Redis, task queues, microservices, Kubernetes, machine learning, or a large analytics stack without an evidenced need.
 
@@ -107,6 +108,55 @@ Always re-check live product availability, product versions, endpoint limits, an
 ## Document authority
 
 Use `CLAUDE.md` for execution rules, `docs/PRD.md` for current product scope, `docs/SCIENTIFIC_METHODOLOGY.md` for scientific behavior, and `docs/DECISIONS.md` for accepted choices. ADR-012 supersedes earlier 24-month guidance and sets the current Bangladesh 2010–2026 snapshot. Earlier handoff prose and mockups are design context only where they agree with the accepted decision.
+
+## Run natively (Windows, no Docker)
+
+EMBERLENS runs directly on your Windows laptop for the competition presentation. Docker is not required for development, startup, or the demo. The backend (FastAPI) and frontend (Vite) are two local processes.
+
+### Prerequisites
+
+- Python 3.12+ and Node.js 20+ with npm
+- Backend venv: `backend/.venv` with runtime deps installed
+- Frontend deps: `frontend/node_modules/` present (`npm ci`)
+- National DuckDB: `backend/emberlens-bangladesh.duckdb` (overridable with `$env:EMBERLENS_DB`)
+
+### First-time setup
+
+```powershell
+cd "W:\Pipeline\Nasa Space App Challenge"
+
+# Backend (run from project root; modules assume repo root on sys.path)
+cd backend
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-prod.txt
+.venv\Scripts\python -m pip install pytest==9.2.0 ruff==0.17.4
+cd ..
+
+# Frontend
+cd frontend
+npm ci
+cd ..
+```
+
+### Startup and shutdown
+
+```powershell
+.\start_emberlens.ps1   # verifies env, starts backend + frontend, prints URLs
+.\stop_emberlens.ps1    # stops only the processes it started
+```
+
+Launcher defaults (from `frontend/vite.config.ts` and `backend/config.py`):
+
+- Backend: `http://127.0.0.1:8000` (`/api/v1/health`)
+- Frontend: `http://127.0.0.1:5173` (Vite proxies `/api` → `127.0.0.1:8000`)
+
+Overrides: `.\start_emberlens.ps1 -BackendPort 8000 -FrontendPort 5173 -BackendHost 127.0.0.1`. The scripts refuse to start duplicates and clean up their own processes on failure.
+
+Database: the national DuckDB lives at `backend/emberlens-bangladesh.duckdb` by default; override with `$env:EMBERLENS_DB`. Logs live under `.runtime/logs/` (`backend.log`, `frontend.log`).
+
+Container assets previously under the repository root (`Dockerfile`, `compose.yaml`, `.dockerignore`, `backend/container_start.py`) are archived under `archive/future-cloud-deployment/docker/` for a future cloud deployment. They are not part of the current development or presentation workflow, are not invoked by the native launcher, and Docker has not been removed from the repository — only from the active path.
+
+Cloud deployment is a future task; the backend stays environment-based (`EMBERLENS_DB`, `DATA_ROOT`, `FRONTEND_ORIGINS`) so it remains portable to Linux.
 
 ## First instruction to the coding agent
 

@@ -9,8 +9,9 @@ maplibregl.setWorkerUrl(mapLibreWorkerUrl);
 const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const AOI_URL = '/aoi/bangladesh-national.geojson';
 const COUNTRY_OUTLINE_URL = '/aoi/bangladesh-country-outline.geojson';
+type AreaBounds = [number, number, number, number];
 
-export function HotspotMap({ cells, observations, onSelect }: { cells: MapDensityCell[]; observations: ObservationListItem[]; onSelect: (id: string) => void }) {
+export function HotspotMap({ cells, observations, selectedBounds, onViewBoundsChange, onSelect }: { cells: MapDensityCell[]; observations: ObservationListItem[]; selectedBounds: AreaBounds | null; onViewBoundsChange: (bounds: AreaBounds) => void; onSelect: (id: string) => void }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -51,6 +52,13 @@ export function HotspotMap({ cells, observations, onSelect }: { cells: MapDensit
         'circle-radius': 3.5, 'circle-color': '#ffe0c9', 'circle-stroke-color': '#7c2d12',
         'circle-stroke-width': 0.8, 'circle-opacity': 0.98,
       } });
+      m.addSource('selected-area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      m.addLayer({ id: 'selected-area-fill', type: 'fill', source: 'selected-area', paint: {
+        'fill-color': '#43b8e5', 'fill-opacity': 0.06,
+      } });
+      m.addLayer({ id: 'selected-area-line', type: 'line', source: 'selected-area', paint: {
+        'line-color': '#67d4ff', 'line-width': 2.5, 'line-dasharray': [2, 1],
+      } });
       m.on('click', 'page-observations', (e) => {
         const id = e.features?.[0]?.properties?.observation_id;
         if (id) onSelect(String(id));
@@ -78,6 +86,15 @@ export function HotspotMap({ cells, observations, onSelect }: { cells: MapDensit
       });
       m.on('mouseenter', 'density-cells', () => { m.getCanvas().style.cursor = 'pointer'; });
       m.on('mouseleave', 'density-cells', () => { m.getCanvas().style.cursor = ''; });
+      const reportViewBounds = () => {
+        const bounds = m.getBounds();
+        onViewBoundsChange([
+          Number(bounds.getWest().toFixed(4)), Number(bounds.getSouth().toFixed(4)),
+          Number(bounds.getEast().toFixed(4)), Number(bounds.getNorth().toFixed(4)),
+        ]);
+      };
+      m.on('moveend', reportViewBounds);
+      reportViewBounds();
       setMapReady(true);
     });
     return () => { m.remove(); map.current = null; setMapReady(false); };
@@ -113,6 +130,22 @@ export function HotspotMap({ cells, observations, onSelect }: { cells: MapDensit
       })),
     });
   }, [observations, mapReady]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !mapReady || !m.isStyleLoaded()) return;
+    const source = m.getSource('selected-area') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    const [west, south, east, north] = selectedBounds ?? [0, 0, 0, 0];
+    source.setData(selectedBounds ? {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] },
+        properties: {},
+      }],
+    } : { type: 'FeatureCollection', features: [] });
+  }, [selectedBounds, mapReady]);
 
   return (
     <div className="map-wrap">

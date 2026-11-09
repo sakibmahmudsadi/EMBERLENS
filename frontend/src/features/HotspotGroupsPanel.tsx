@@ -9,7 +9,7 @@ const inclusiveToExclusive = (date: string) => {
   return d.toISOString().slice(0, 10);
 };
 
-export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors: string[] }) {
+export function HotspotGroupsPanel({ aoiId, sensors, bounds }: { aoiId: string; sensors: string[]; bounds: [number, number, number, number] | null }) {
   const [start, setStart] = useState('2026-06-01');
   const [end, setEnd] = useState('2026-06-07');
   const [sensor, setSensor] = useState('VIIRS');
@@ -36,6 +36,7 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
     const q = new URLSearchParams({ aoi_id: aoiId, start, end: inclusiveToExclusive(end), max_gap_hours: String(gap) });
     if (sensor) q.set('sensor', sensor);
     if (distanceM !== null) q.set('distance_m', String(distanceM));
+    if (bounds) q.set('bounds', bounds.join(','));
     try { setResult(await api.hotspotGroups(q)); }
     catch (ex) { setError(ex instanceof Error ? ex.message : String(ex)); }
     finally { setBusy(false); }
@@ -46,6 +47,7 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
     const manifest = {
       project: 'EMBERLENS', dataset_type: 'experimental_hotspot_groups',
       created_at_utc: new Date().toISOString(), aoi: result.aoi,
+      query_area: result.query_area,
       date_range: { start_utc: result.period.start, end_exclusive_utc: result.period.end, end_inclusive_utc: end, time_zone: result.period.time_zone },
       filters: result.filters,
       method: result.method,
@@ -99,7 +101,7 @@ export function HotspotGroupsPanel({ aoiId, sensors }: { aoiId: string; sensors:
       <div className="surface-heading">
         <div><div className="eyebrow">RECONSTRUCT · EXPERIMENTAL</div><h2>Algorithmic hotspot groups</h2></div>
       </div>
-      <p className="groups-note">Nearby detections are grouped by sensor, platform, and product. These experimental groups are not confirmed fires or perimeters. Results are parameter-sensitive and source gaps do not establish observation opportunity.</p>
+      <p className="groups-note">Area: {bounds ? bounds.map(value => value.toFixed(3)).join(', ') : 'full national query box'}. Nearby detections are grouped by sensor, platform, and product. These experimental groups are not confirmed fires or perimeters. Results are parameter-sensitive and source gaps do not establish observation opportunity.</p>
       <form className="groups-form" onSubmit={run}>
         <label>From<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
         <label>Through<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>

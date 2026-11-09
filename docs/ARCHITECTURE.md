@@ -60,7 +60,7 @@ This is a conceptual boundary diagram. It does not assert that any component is 
 | Map | MapLibre GL JS | Use a real basemap and real observation data layer; review tile source/license |
 | Charts | One accessible chart library | Calendar matrix and compact trend charts; avoid library sprawl |
 | Tests | Pytest; frontend test runner already present or selected deliberately | Test pipeline and contracts end-to-end |
-| Local infrastructure | Docker Compose for database/services if it reduces setup friction | Do not containerize everything automatically |
+| Local infrastructure | Native Windows scripts (`start_emberlens.ps1` / `stop_emberlens.ps1`) | One-command local startup for the competition presentation; container deployment archived under `archive/future-cloud-deployment/docker/` for future cloud use |
 
 If the repository already has a viable stack, prefer retaining it unless audit evidence demonstrates a material problem. For one static AOI and at most 24 months of data, avoid adding a database server or spatial infrastructure solely because it appears in the target diagram.
 

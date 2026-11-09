@@ -26,4 +26,4 @@ export function SensorFilters({ options, value, onChange, compact = false }: { o
     {!compact && <SensorChips label="Product" options={options.products} selected={value.products} onChange={v => onChange({ ...value, products: v })} />}
   </div>;
 }
-export const SENSOR_EXPLAINER = 'MODIS and VIIRS differ in spatial resolution, overpass schedule, algorithm, and confidence semantics. Series are never summed into a single number. Aligned months do not make counts physically equivalent.';
+export const SENSOR_EXPLAINER = 'MODIS and VIIRS differ in spatial resolution (~1 km vs 375 m), overpass schedule, algorithm, and confidence semantics (MODIS numeric 0-100; VIIRS low, nominal, high). Series are never summed into a single number. Aligned months do not make counts physically equivalent.';

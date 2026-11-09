@@ -6,7 +6,8 @@ These cases fail the release even if every HTTP call returns 200.
 
 ## BE-TC-136 — A calendar cell trace can be reproduced back to raw source rows
 - **Type / Priority:** Science / P0 · **Refs:** VAL §3, §4, §6; METH §14; FR-09
-- **Pre:** ENV-3 read-only copy; pick VIIRS 2024-02 cell for `sundarbans-bd`
+- **Status:** RETIRED (2026-11-09, Step 3) — the original `sundarbans-bd` / 2024–2025 expectation (VIIRS Feb-2024 cell, snapshot SHA-256 `3bf8ad84…3653`) described the pre-national prototype and is no longer the active AOI/window. The traceability logic itself is unchanged; for the current national scope use the `bangladesh-bd` / 2010–2026 calendar and manifests in `DATA_SOURCE_REGISTER.md` §11 (MODIS `5a1fd42b902c…`, VIIRS `460a271eedb5…`). Do not reconstruct the retired Sundarbans geometry.
+- **Pre (retired):** ENV-3 read-only copy; pick VIIRS 2024-02 cell for `sundarbans-bd`
 - **Steps:**
   1. `GET /api/v1/calendar?aoi_id=sundarbans-bd&start=2024-02-01&end=2024-03-01`; record VIIRS count and `source_snapshot_ids`
   2. `GET /api/v1/observations?products=VIIRS_SNPP_SP&start=2024-02-01&end=2024-03-01&page_size=1000`

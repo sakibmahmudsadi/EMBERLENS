@@ -52,3 +52,6 @@ Thumbs.db
 *.duckdb
 *.duckdb.wal
 /deploy-data/
+
+# Launcher runtime (PIDs + logs; never commit)
+.runtime/

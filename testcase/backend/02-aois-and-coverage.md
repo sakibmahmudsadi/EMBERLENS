@@ -4,9 +4,9 @@
 
 ## BE-TC-011 — AOI list returns configured AOI with GeoJSON geometry
 - **Type / Priority:** Functional / P0 · **Refs:** API §2; FR-04; DATA_DICT §2 (`aoi`)
-- **Pre:** ENV-2 with `demo-aoi` (synthetic box 89..91 / 21..23) or ENV-3 `sundarbans-bd`
+- **Pre:** ENV-2 with `demo-aoi` (synthetic box 89..91 / 21..23) or ENV-3 `bangladesh-bd` (current active AOI; the earlier expected `sundarbans-bd` / `88.0/21.5/90.0/22.7` expectation is retired — see below)
 - **Steps:** `GET /api/v1/aois`
-- **Expected:** 200; array length ≥ 1; each item has `aoi_id`, `name`, `crs` (= `EPSG:4326`), `source`, `created_at_utc`; `geometry` is a GeoJSON Polygon/MultiPolygon with `coordinates` in **[longitude, latitude]** order (RFC 7946). For ENV-3 confirm `aoi_id = sundarbans-bd` and bbox matches manifest (`88.0/21.5/90.0/22.7`).
+- **Expected:** 200; array length ≥ 1; each item has `aoi_id`, `name`, `crs` (= `EPSG:4326`), `source`, `created_at_utc`; `geometry` is a GeoJSON Polygon/MultiPolygon with `coordinates` in **[longitude, latitude]** order (RFC 7946). For ENV-3 confirm `aoi_id = bangladesh-bd` and bbox matches the national config (`88.0/20.5/92.7/26.7`). The Sundarbans-box assertion (`sundarbans-bd`, `88.0/21.5/90.0/22.7`) is **retired (2026-11-09, Step 3)** — the Sundarbans prototype was removed and the national bbox supersedes it (ADR-012); do not reconstruct that geometry.
 - **Automation:** Auto: `tests/test_api.py::test_aois` (order not asserted there) · **Status:** Not executed here
 
 ## BE-TC-012 — GeoJSON coordinate order is lon,lat (not lat,lon)

@@ -1,8 +1,0 @@
-{
-  "type": "FeatureCollection",
-  "features": [{
-    "type": "Feature",
-    "properties": {"name": "Sundarbans (provisional boundary)", "note": "Best-effort bounding-box polygon for demo only. Not an official boundary."},
-    "geometry": {"type": "Polygon", "coordinates": [[[89.0,21.6],[89.7,21.6],[89.7,22.5],[89.0,22.5],[89.0,21.6]]]}
-  }]
-}

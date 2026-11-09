@@ -20,3 +20,8 @@ Start with `PRD.md`, `SCIENTIFIC_METHODOLOGY.md`, and `ARCHITECTURE.md`. Use `PR
 | PROJECT_AUDIT | First task in an existing repository |
 | COMPETITION_STRATEGY | Challenge alignment and demonstration narrative |
 | KIMI_K3_CLAUDE_CODE | Model/API usage notes |
+| LOCAL_DEVELOPMENT | Native Windows setup, startup/shutdown, URLs, logs, troubleshooting |
+| DEMO_RUNBOOK | Competition presentation runbook (map → calendar → drilldown → export) |
+| REPOSITORY_CLEANUP | What was removed/archived (Sundarbans, QA DBs, Docker), what remains |
+| WORLD_FINAL_READINESS_AUDIT | Evidence-labelled readiness (verified / partial / not verified) |
+| SOURCE_DATA_COVERAGE_REPORT | Loaded snapshot provenance and coverage limitations |

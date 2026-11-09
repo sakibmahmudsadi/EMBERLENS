@@ -49,6 +49,8 @@ Where appropriate:
 
 Observation and calendar queries also support quality filters: `min_frp_native` applies to the source-native FRP field (no unit conversion is implied); `daynight` accepts `D` or `N`; `min_modis_confidence` is a 0–100 numeric threshold applied to MODIS records only; and `viirs_confidence_classes` accepts the source-native `L`, `N`, and/or `H` classes for VIIRS only. Sensor-specific confidence filters leave observations from the other sensor unchanged. Observation exports apply these filters directly. Calendar exports recompute the requested bins from source observations, require both `start` and `end`, and do not depend on a prior calendar request or cached aggregate rows.
 
+Spatial queries and exports may include a `bounds` selection in `west,south,east,north` order (query parameter for GET endpoints; JSON field for POST `/exports`). It requires a configured `aoi_id`, is intersected with that AOI's stored geometry, and applies to observations, map density, calendar rows, experimental groups, and exports. The response/manifest reports requested and effective WGS 84 bounds. Without `bounds`, the entire configured AOI is used. This enables map-view subregion queries without accepting a new arbitrary AOI polygon or querying beyond the frozen Bangladesh bounding box. Source-service availability remains global and is not clipped to the selected map area.
+
 `/api/v1/map-density` uses the same AOI, dates, sensor/product, and quality filters as the calendar. It returns grid-cell centers and per-series row counts. Marker size uses the highest single-series count in a cell; counts from MODIS and VIIRS are never summed. A marker is a spatial summary, not an individual observation or perimeter.
 
 For the prototype, accept only the configured AOI and dates inside the frozen window; do not accept arbitrary SQL, database identifiers, or filesystem paths from clients.
@@ -181,5 +183,5 @@ Use proper HTTP status codes. Never return HTTP 200 with a hidden ingestion or d
 - Bound AOI vertex count and maximum date span where needed.
 - Validate GeoJSON type, coordinate ranges, and geometry validity.
 - Apply pagination and query timeouts.
-- `/api/v1/hotspot-groups` is limited to 90-day windows and 50,000 matching source observations. It requires an AOI and date range; thresholds are returned with the result and remain experimental pending sensitivity evaluation.
+- `/api/v1/hotspot-groups` is limited to 90-day windows and 50,000 matching source observations. It requires an AOI and date range; optional area bounds and clustering thresholds are returned with the result and remain experimental pending sensitivity evaluation.
 - Ensure error details do not reveal secrets, SQL, or internal paths.

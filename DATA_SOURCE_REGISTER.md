@@ -1,7 +1,7 @@
 # EMBERLENS — Data Source Register
 
 **Current status (2026-11-07): national Bangladesh prototype snapshot downloaded, validated, and loaded.**
-Current authoritative counts and availability metadata are recorded in section 11. Older bootstrap notes in sections 1–10 describe earlier project states and are superseded where they conflict with section 11. The active data is loaded only into `backend/emberlens-bangladesh.duckdb`; the retired Sundarbans database is separate.
+Current authoritative counts and availability metadata are recorded in section 11. Older bootstrap notes in sections 1–10 describe earlier project states and are superseded where they conflict with section 11. The active data is loaded only into `backend/emberlens-bangladesh.duckdb` (the sole active database since 2026-11-09).
 
 ## 1. What was verified live (2026-11-06)
 
@@ -49,8 +49,8 @@ The earlier 2020–2025 Sundarbans window and 24→72-month change below are ret
 - Products unchanged: **NASA FIRMS Standard (science-quality) only** — `MODIS_SP` (Collection 6.1) and `VIIRS_SNPP_SP` (VNP14IMGTDL_SP 375 m). No NRT.
 - Window frozen to **2010-01-01 .. 2026-07-31** inclusive (199 month bins). Live `/api/data_availability/csv/<MAP_KEY>/` check on 2026-11-06 returned `MODIS_SP` 2000-11-01 → 2026-08-31 and `VIIRS_SNPP_SP` 2012-01-20 → 2026-07-31; the end is capped at the common VIIRS ceiling. MODIS-only 2026-08 is deliberately excluded rather than backfilled with NRT.
 - `scripts/ingest.py --download` requests 5-day chunks via the FIRMS Area API using `.env` (`NASA_FIRMS_MAP_KEY`; never print/commit it). Raw files will be `data/raw/MODIS_SP_2010-01-01_2026-07-31_bangladesh-bd.csv` and `data/raw/VIIRS_SNPP_SP_2010-01-01_2026-07-31_bangladesh-bd.csv`; atomic write only after all chunks succeed, with manifests/SHA-256 in `data/processed/manifests/`.
-- `scripts/load_national_data.py` loads into a **separate** DB (default `backend/emberlens-bangladesh.duckdb`) and does **not** delete/replace legacy `backend/emberlens.duckdb` (locked/demo). Use a scratch DB for verification: `--db data/processed/bangladesh-bd.duckdb`.
-- Frontend defaults now select this window and render `frontend/public/aoi/bangladesh-national.geojson`; legacy `sundarbans-demo.geojson` retained but inactive.
+- `scripts/load_national_data.py` loads into the national DB (`backend/emberlens-bangladesh.duckdb`). Use a scratch DB for verification: `--db data/processed/bangladesh-bd.duckdb`.
+- Frontend defaults now select this window and render `frontend/public/aoi/bangladesh-national.geojson` (plus `bangladesh-country-outline.geojson` as a display-only ADM0 reference). The former `sundarbans-demo.geojson` was removed when the scope became Bangladesh-only (2026-11-09).
 - BBox ≠ boundary and availability ≠ clear-sky coverage. Empty periods stay “no source records returned; observation coverage unknown.” No climatology/forecast claim from this window without separate validation.
 
 ## 11. Current loaded snapshot and availability evidence (2026-11-07)

@@ -74,3 +74,10 @@
 - **Steps:** Query the same AOI/date/sensor/max-gap parameters twice, once with a 500 m distance override and once with a 10,000 m override. Repeat with the distance field empty to use the sensor default.
 - **Expected:** Each result shows the requested distance (or sensor default), keeps the same matched-observation count when only distance changes, and may produce different group counts. The export manifest records the selected distance. The UI continues to label grouping experimental and does not describe groups as confirmed incidents.
 - **BrowserOS result (2026-11-08):** PASS on the bundled local QA app for June 1–7, 2026, VIIRS and 24-hour max gap: 18 matched observations returned 2 groups at 500 m and 3 groups at 10,000 m; the UI displayed each distance and retained the experimental status. The 1,258 px desktop screenshot showed the added control row fits without pushing the page wider than the viewport.
+
+## FE-MC-011 — Select a map-view area and reuse it across analysis
+
+- **Priority:** P1 · **Type:** Area selection / query scope
+- **Steps:** Zoom or pan the national map to a subregion. Choose “Use map view as area”; check the selected-area outline, observation count, calendar, groups, and export scope. Choose “Full Bangladesh” to reset.
+- **Expected:** All spatial results use the same selected bounds clipped to the configured national query box; API/export metadata records requested and effective bounds. Source availability remains global and is labeled as such. Reset restores national results.
+- **BrowserOS result:** Pending verification on the rebuilt local QA app.

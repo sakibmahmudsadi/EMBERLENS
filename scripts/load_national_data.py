@@ -3,8 +3,7 @@
 Reads data/raw/MODIS_SP_2010-01-01_2026-07-31_bangladesh-bd.csv and
 data/raw/VIIRS_SNPP_SP_2010-01-01_2026-07-31_bangladesh-bd.csv, validates,
 maps, deduplicates, registers the bangladesh-bd AOI, and prints real SELECT
-counts. It does NOT delete legacy Sundarbans/2024-2025 rows; use a separate
-database or remove legacy snapshots deliberately.
+counts.
 
 Usage (from project root, using the backend venv):
     backend/.venv/Scripts/python.exe scripts/load_national_data.py
@@ -42,7 +41,7 @@ FILES = [
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default=str(ROOT / "backend" / "emberlens-bangladesh.duckdb"),
-                        help="DuckDB path (default keeps the locked/demo backend DB untouched)")
+                        help="DuckDB path (default: backend/emberlens-bangladesh.duckdb)")
     args = parser.parse_args()
 
     db = init_db(Path(args.db))

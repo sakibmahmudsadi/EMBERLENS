@@ -92,7 +92,7 @@ Endpoints: `GET /api/v1/observations`, `GET /api/v1/observations/{observation_id
 
 ## BE-TC-035 — `aoi_id` on list/export is not a silent no-op
 - **Type / Priority:** Negative / P1 · **Refs:** API §3; CLAUDE.md §3; D-22
-- **Steps:** `GET /api/v1/observations?aoi_id=sundarbans-bd` with rows both inside and outside the AOI (ENV-1 fixture with one row at 0/0)
+- **Steps:** `GET /api/v1/observations?aoi_id=bangladesh-bd` with rows both inside and outside the AOI (ENV-1 fixture with one row at 0/0). The earlier literal `sundarbans-bd` example is retired (2026-11-09, Step 3): the active AOI is `bangladesh-bd`; the case logic is unchanged.
 - **Expected (spec):** only AOI rows returned, or parameter rejected with 4xx.
 - **Actual (code review):** `aoi_id` is accepted by the route signature and never passed to `query_observations` → **all** rows returned regardless; an analyst can believe they filtered by AOI and did not.
 - **Status:** Code-review fail — D-22

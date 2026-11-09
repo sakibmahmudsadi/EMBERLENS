@@ -5,7 +5,7 @@ import { ErrorState } from '../components/States';
 
 type GeneratedExport = ExportResponse & { rawContent?: string };
 
-export function ExportPanel({ aoiId, start, end, filters, qualityFilters, qualityFilteringAvailable }: { aoiId: string; start: string; end: string; filters: { sensors: string[]; platforms: string[]; products: string[] }; qualityFilters: { min_frp_native: string; daynight: string; min_modis_confidence: string; viirs_confidence_classes: string[] }; qualityFilteringAvailable: boolean }) {
+export function ExportPanel({ aoiId, bounds, start, end, filters, qualityFilters, qualityFilteringAvailable }: { aoiId: string; bounds: [number, number, number, number] | null; start: string; end: string; filters: { sensors: string[]; platforms: string[]; products: string[] }; qualityFilters: { min_frp_native: string; daynight: string; min_modis_confidence: string; viirs_confidence_classes: string[] }; qualityFilteringAvailable: boolean }) {
   const [dataset, setDataset] = useState('observations');
   const [format, setFormat] = useState('csv');
   const [result, setResult] = useState<GeneratedExport | null>(null);
@@ -20,6 +20,11 @@ export function ExportPanel({ aoiId, start, end, filters, qualityFilters, qualit
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(''); setResult(null);
+    if (dataset === 'calendar' && format === 'geojson') {
+      setErr('Calendar GeoJSON is not supported — calendar bins have no coordinates. Use Observations + GeoJSON for points, or Calendar + CSV/JSON for bins.');
+      setBusy(false);
+      return;
+    }
     const hasQualityFilters = Boolean(qualityFilters.min_frp_native || qualityFilters.daynight || qualityFilters.min_modis_confidence || qualityFilters.viirs_confidence_classes.length);
     if (hasQualityFilters && !qualityFilteringAvailable) {
       setErr('Restart the backend to enable these quality filters in exported data.');
@@ -27,7 +32,7 @@ export function ExportPanel({ aoiId, start, end, filters, qualityFilters, qualit
       return;
     }
     try {
-      const response = await api.postExport({ dataset_type: dataset, format, aoi_id: aoiId, start, end: exclusiveEnd(end), sensors: filters.sensors, platforms: filters.platforms, products: filters.products, min_frp_native: qualityFilters.min_frp_native !== '' ? Number(qualityFilters.min_frp_native) : null, daynight: qualityFilters.daynight || null, min_modis_confidence: qualityFilters.min_modis_confidence !== '' ? Number(qualityFilters.min_modis_confidence) : null, viirs_confidence_classes: qualityFilters.viirs_confidence_classes, include_metadata: true });
+      const response = await api.postExport({ dataset_type: dataset, format, aoi_id: aoiId, bounds: bounds?.join(','), start, end: exclusiveEnd(end), sensors: filters.sensors, platforms: filters.platforms, products: filters.products, min_frp_native: qualityFilters.min_frp_native !== '' ? Number(qualityFilters.min_frp_native) : null, daynight: qualityFilters.daynight || null, min_modis_confidence: qualityFilters.min_modis_confidence !== '' ? Number(qualityFilters.min_modis_confidence) : null, viirs_confidence_classes: qualityFilters.viirs_confidence_classes, include_metadata: true });
       const raw = await response.text();
       if (!response.ok) {
         let message = `HTTP ${response.status}`;
@@ -95,7 +100,9 @@ export function ExportPanel({ aoiId, start, end, filters, qualityFilters, qualit
         <label>Format <select value={format} onChange={e => setFormat(e.target.value)} aria-label="Format"><option value="csv">CSV</option><option value="json">JSON</option><option value="geojson">GeoJSON</option></select></label>
         <button className="btn" type="submit" disabled={busy || !aoiId}>{busy ? 'Preparing…' : !aoiId ? 'National data unavailable' : 'Generate export'}</button>
       </form>
-      <p style={{ fontSize: 13, color: 'var(--muted)' }}>AOI: {aoiId} · {start} → {end} · Sensors: {filters.sensors.join(', ') || 'all returned'} · Platforms: {filters.platforms.join(', ') || 'all returned'} · Active quality filters are recorded in the export manifest.</p>
+      {!dataset || dataset === 'observations' ? null : null}
+      <p style={{ fontSize: 13, color: 'var(--muted)' }}>AOI: {aoiId}{bounds ? ` · map area ${bounds.map(value => value.toFixed(3)).join(', ')}` : ' · full query area'} · {start} → {end} · Sensors: {filters.sensors.join(', ') || 'all returned'} · Platforms: {filters.platforms.join(', ') || 'all returned'} · Active quality filters are recorded in the export manifest.</p>
+      {dataset === 'calendar' && format === 'geojson' && <p className="export-note">Calendar + GeoJSON is not supported (bins have no coordinates). Use Observations + GeoJSON for points, or Calendar + CSV/JSON for bins.</p>}
       {err && <ErrorState msg={err} />}
       {result && (
         <div style={{ marginTop: 12 }}>

@@ -13,9 +13,11 @@ import type { Aoi, CalendarResponse, CalendarSeries, CalendarValue, CoverageResp
 
 const INITIAL_START = '2010-01-01';
 const INITIAL_END = '2026-07-31';
+const DEMO_BOUNDS: AreaBounds = [88, 20.5, 92.7, 26.7];
 const PAGE_SIZE = 100;
 const HotspotMap = lazy(() => import('./map/HotspotMap').then(module => ({ default: module.HotspotMap })));
 type QualityFilters = { min_frp_native: string; daynight: string; min_modis_confidence: string; viirs_confidence_classes: string[] };
+type AreaBounds = [number, number, number, number];
 type CalendarInspection = { series: CalendarSeries; value: CalendarValue };
 const EMPTY_QUALITY_FILTERS: QualityFilters = { min_frp_native: '', daynight: '', min_modis_confidence: '', viirs_confidence_classes: [] };
 function fallbackDensity(rows: ObservationListItem[]): MapDensityCell[] {
@@ -67,6 +69,8 @@ export default function App() {
   const [appliedEnd, setAppliedEnd] = useState(INITIAL_END);
   const [observations, setObservations] = useState<ObservationListItem[]>([]);
   const [mapCells, setMapCells] = useState<MapDensityCell[]>([]);
+  const [mapViewBounds, setMapViewBounds] = useState<AreaBounds | null>(null);
+  const [selectedBounds, setSelectedBounds] = useState<AreaBounds | null>(null);
   const [mapWarning, setMapWarning] = useState('');
   const [mapDensitySupported, setMapDensitySupported] = useState<boolean | null>(null);
   const [playbackYear, setPlaybackYear] = useState<number | null>(null);
@@ -115,6 +119,7 @@ export default function App() {
     setLoading(true);
     setError('');
     const base = new URLSearchParams({ aoi_id: aoi.aoi_id, start: appliedStart, end: apiExclusiveEnd(appliedEnd) });
+    if (selectedBounds) base.set('bounds', selectedBounds.join(','));
     if (filters.sensors.length) base.set('sensors', filters.sensors.join(','));
     if (filters.platforms.length) base.set('platforms', filters.platforms.join(','));
     if (filters.products.length) base.set('products', filters.products.join(','));
@@ -164,7 +169,7 @@ export default function App() {
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [aoi, appliedStart, appliedEnd, filters, qualityFilters]);
+  }, [aoi, appliedStart, appliedEnd, filters, qualityFilters, selectedBounds]);
 
   useEffect(() => { if (aoi) void load(1, null); }, [aoi, load]);
 
@@ -179,6 +184,11 @@ export default function App() {
   const playbackStartYear = Number(appliedStart.slice(0, 4));
   const playbackEndYear = Number(appliedEnd.slice(0, 4));
   const mappedRecordCount = useMemo(() => mapCells.reduce((total, cell) => total + cell.series.reduce((seriesTotal, series) => seriesTotal + series.observation_count, 0), 0), [mapCells]);
+  const selectableBounds = mapViewBounds ? [
+    Math.max(mapViewBounds[0], DEMO_BOUNDS[0]), Math.max(mapViewBounds[1], DEMO_BOUNDS[1]),
+    Math.min(mapViewBounds[2], DEMO_BOUNDS[2]), Math.min(mapViewBounds[3], DEMO_BOUNDS[3]),
+  ] as AreaBounds : null;
+  const canSelectMapView = Boolean(selectableBounds && selectableBounds[0] < selectableBounds[2] && selectableBounds[1] < selectableBounds[3]);
   const mapPageObservations = useMemo(() => playbackYear === null ? observations : observations.filter(row => row.acquired_at_utc.slice(0, 4) === String(playbackYear)), [observations, playbackYear]);
   const coverageItems = coverage?.items ?? coverage?.coverage ?? coverage?.availability ?? [];
   const exportStart = calendarInspection?.value.period_start.slice(0, 10) ?? appliedStart;
@@ -219,6 +229,7 @@ export default function App() {
     }
     const requestId = ++playbackRequestSequence.current;
     const query = new URLSearchParams({ aoi_id: aoi.aoi_id, start, end });
+    if (selectedBounds) query.set('bounds', selectedBounds.join(','));
     if (filters.sensors.length) query.set('sensors', filters.sensors.join(','));
     if (filters.platforms.length) query.set('platforms', filters.platforms.join(','));
     if (filters.products.length) query.set('products', filters.products.join(','));
@@ -250,7 +261,7 @@ export default function App() {
     } finally {
       if (requestId === playbackRequestSequence.current) setPlaybackLoading(false);
     }
-  }, [aoi, appliedStart, appliedEnd, filters, qualityFilters, playbackEndYear, stopMapPlayback]);
+  }, [aoi, appliedStart, appliedEnd, filters, qualityFilters, playbackEndYear, stopMapPlayback, selectedBounds]);
   const playMapHistory = () => {
     if (playbackYear !== null && playbackYear < playbackEndYear) {
       playbackRunning.current = true;
@@ -306,14 +317,14 @@ export default function App() {
       <main id="top">
         <section className="map-stage" aria-label="National observation map">
           <Suspense fallback={<div className="map-wrap map-loading-shell" role="status">Loading map…</div>}>
-            <HotspotMap cells={mapCells} observations={mapPageObservations} onSelect={setSelectedObservation} />
+            <HotspotMap cells={mapCells} observations={mapPageObservations} selectedBounds={selectedBounds} onViewBoundsChange={setMapViewBounds} onSelect={setSelectedObservation} />
           </Suspense>
           <div className="map-heading">
             <div className="eyebrow">OBSERVATION EXPLORER</div>
             <h1>Fire signals,<br /><em>in context.</em></h1>
             <p>Explore satellite thermal-anomaly detections across Bangladesh.</p>
           </div>
-          <div className="map-caption"><span className="caption-mark" />{aoi?.aoi_id === 'bangladesh-bd' ? 'Bangladesh' : aoi?.name ?? 'Selected AOI'} · {playbackYear === null ? <>{appliedStart} — {appliedEnd}<span className="caption-sep">·</span>{observationTotal.toLocaleString()} records</> : playbackLoading ? `Loading ${playbackYear} annual map…` : <>{playbackYear} · {mappedRecordCount.toLocaleString()} mapped records{mappedRecordCount === 0 ? ' · observation coverage unknown' : ''}</>}</div>
+          <div className="map-caption"><span className="caption-mark" />{aoi?.aoi_id === 'bangladesh-bd' ? 'Bangladesh' : aoi?.name ?? 'Selected AOI'}{selectedBounds && <><span className="caption-sep">·</span>Selected bounds {selectedBounds.map(value => value.toFixed(3)).join(', ')}</>} · {playbackYear === null ? <>{appliedStart} — {appliedEnd}<span className="caption-sep">·</span>{observationTotal.toLocaleString()} records</> : playbackLoading ? `Loading ${playbackYear} annual map…` : <>{playbackYear} · {mappedRecordCount.toLocaleString()} mapped records{mappedRecordCount === 0 ? ' · observation coverage unknown' : ''}</>}</div>
           {mapWarning && <div className="map-capability-warning" role="status">{mapWarning}</div>}
           <HistoryPlayback startYear={playbackStartYear} endYear={playbackEndYear} year={playbackYear} playing={playbackPlaying} loading={playbackLoading} disabled={mapDensitySupported !== true || !aoi || Boolean(calendarInspection)} error={playbackError} onYearChange={selectMapYear} onPlay={playMapHistory} onPause={stopMapPlayback} onReset={() => { resetMapPlayback(); void load(1, null); }} />
           <div className="map-legend">
@@ -321,12 +332,20 @@ export default function App() {
             <span className="legend-item"><span className="legend-point" />{playbackYear === null ? 'Feed page' : `Page points · ${playbackYear}`}</span>
             <a className="legend-item legend-source-link" href="https://www.geoboundaries.org/api/current/gbOpen/BGD/ADM0/" target="_blank" rel="noreferrer" aria-label="Bangladesh reference outline from geoBoundaries, 2015; display only" title="2015 reference outline for map context only; the query area remains the bounding box"><span className="legend-country-line" />geoBoundaries 2015</a>
             <span className="legend-item"><span className="legend-line" />Query bbox</span>
+            {selectedBounds && <span className="legend-item"><span className="legend-selected-area" />Selected area</span>}
           </div>
           <div className="filter-dock" aria-label="Observation filters">
             <div className="dock-filter dock-sensors"><span className="dock-label">SENSORS</span><SensorFilters options={sensorOptions} value={filters} onChange={value => { resetMapPlayback(); setCalendarInspection(null); setFilters(value); }} compact /></div>
             <label className="dock-date"><span className="dock-label">FROM</span><input type="date" value={draftStart} onChange={e => setDraftStart(e.target.value)} /></label>
             <label className="dock-date"><span className="dock-label">TO</span><input type="date" value={draftEnd} onChange={e => setDraftEnd(e.target.value)} /></label>
             <button className="apply-button" onClick={applyFilters}>Update map <span>↗</span></button>
+            <div className="dock-area-actions">
+              {selectedBounds && <span className="dock-label">AREA FILTER ACTIVE</span>}
+              <button type="button" className="outline-button" disabled={!canSelectMapView} onClick={() => { resetMapPlayback(); setCalendarInspection(null); setSelectedBounds(selectableBounds); }}>
+                {selectedBounds ? 'Update selected area' : 'Use map view as area'}
+              </button>
+              {selectedBounds && <button type="button" className="text-button" onClick={() => { resetMapPlayback(); setCalendarInspection(null); setSelectedBounds(null); }}>Full Bangladesh</button>}
+            </div>
           </div>
           {loading && <div className="map-loading"><span className="spinner" /> Updating observations…</div>}
         </section>
@@ -355,7 +374,7 @@ export default function App() {
 
           {calendar ? <CalendarMatrix data={calendar} onInspect={inspectCalendarCell} /> : loading ? <section className="surface"><Loading /></section> : <section className="surface"><Empty msg="No calendar data is available for this selection." /></section>}
           {calendar && <SeasonalityProfile data={calendar} />}
-          {aoi && <HotspotGroupsPanel aoiId={aoi.aoi_id} sensors={sensorOptions.sensors} />}
+          {aoi && <HotspotGroupsPanel aoiId={aoi.aoi_id} sensors={sensorOptions.sensors} bounds={selectedBounds} />}
 
           <div className="detail-grid">
             <section className="surface observations-panel">
@@ -374,7 +393,7 @@ export default function App() {
             </section>
             <aside className="side-column">
               <ObservationDetailPanel id={selectedObservation} />
-              <ExportPanel aoiId={aoi?.aoi_id ?? ''} start={exportStart} end={exportEnd} filters={exportFilters} qualityFilters={qualityFilters} qualityFilteringAvailable={mapDensitySupported !== false} />
+              <ExportPanel aoiId={aoi?.aoi_id ?? ''} bounds={selectedBounds} start={exportStart} end={exportEnd} filters={exportFilters} qualityFilters={qualityFilters} qualityFilteringAvailable={mapDensitySupported !== false} />
               <section className="surface coverage-panel"><div className="eyebrow">SOURCE AVAILABILITY</div><h3>Coverage notes</h3><p>FIRMS availability describes data in the source service; it does not confirm clear-sky or valid-pixel observation opportunities.</p>
                 {coverageSummary.length === 0 ? <small>No source-availability evidence returned.</small> : <ul>{coverageSummary.map(item => <li key={item.productId}><span>{item.productId} · {item.platform}</span><span>{item.interval} · {coverageStatusLabel(item.status)} · {item.missingDays} FIRMS-reported missing day{item.missingDays === 1 ? '' : 's'}</span></li>)}</ul>}
               </section>

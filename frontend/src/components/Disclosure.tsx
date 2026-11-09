@@ -5,7 +5,7 @@ export function Disclosure() {
       <h2>Scientific disclosures — read before interpreting</h2>
       <ul>
         <li>The sensors do not have identical resolution or observation opportunities. MODIS (≈1 km) and VIIRS 375 m resolve thermal anomalies differently; more detections from one sensor do not necessarily mean more burning.</li>
-        <li>Hotspot detections are not confirmed wildfire incidents, fire perimeters, burned area, or proof of a fire event. FRP/confidence semantics differ by product and must not be equated.</li>
+        <li>Hotspot detections are not confirmed wildfire incidents, fire perimeters, burned area, or proof of a fire event. FRP/confidence semantics differ by product and must not be equated (MODIS numeric 0–100; VIIRS low, nominal, high).</li>
         <li>Cloud, smoke, canopy, overpass timing, fire size/temperature, and product algorithms affect what is detected. Detections may be missed or include agricultural burning, prescribed burns, gas flares, and industrial heat.</li>
         <li>Missing records are not necessarily zero activity. “No source records returned; observation coverage unknown” means absence was not verified as a true zero.</li>
         <li>Historical patterns from this bounded national history do not guarantee future activity and do not establish a climatology or forecast.</li>

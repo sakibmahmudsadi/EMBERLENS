@@ -124,6 +124,7 @@ def test_hotspot_group_response_exposes_reusable_query_provenance(client):
     assert body["filters"] == {
         "sensor": "VIIRS", "platform": None, "product_id": None,
         "max_gap_hours": 12.0, "distance_m": 500.0,
+        "area_selection": None,
     }
     assert body["method"]["candidate_distance_m"] == 500.0
     assert body["source_snapshot_ids"]
@@ -131,6 +132,64 @@ def test_hotspot_group_response_exposes_reusable_query_provenance(client):
     assert {
         snapshot_id for group in body["groups"] for snapshot_id in group["source_snapshot_ids"]
     } <= set(body["source_snapshot_ids"])
+
+
+def test_map_selected_area_filters_spatial_products_and_export(client):
+    params = {
+        "aoi_id": "demo-aoi", "start": "2024-01-01", "end": "2024-04-01",
+        "bounds": "89.9,21.9,90.051,22.051",
+    }
+    observations_response = client.get("/api/v1/observations", params={**params, "page_size": 100})
+    assert observations_response.status_code == 200
+    observation_body = observations_response.json()
+    assert observation_body["pagination"]["total"] == 5
+    assert observation_body["query_area"]["query_bbox_wsen"] == [89.9, 21.9, 90.051, 22.051]
+    assert all(89.9 <= row["longitude"] <= 90.051 and 21.9 <= row["latitude"] <= 22.051
+               for row in observation_body["data"])
+
+    calendar_body = client.get("/api/v1/calendar", params=params).json()
+    calendar_total = sum(value["observation_count"] for series in calendar_body["series"] for value in series["values"])
+    assert calendar_total == observation_body["pagination"]["total"]
+    assert calendar_body["query_area"]["requested_bbox_wsen"] == [89.9, 21.9, 90.051, 22.051]
+
+    map_body = client.get("/api/v1/map-density", params=params).json()
+    map_total = sum(row["observation_count"] for cell in map_body["cells"] for row in cell["series"])
+    assert map_total == observation_body["pagination"]["total"]
+
+    groups_response = client.get("/api/v1/hotspot-groups", params={
+        **{**params, "end": "2024-03-31"}, "sensor": "VIIRS", "max_gap_hours": 24,
+    })
+    assert groups_response.status_code == 200
+    groups_body = groups_response.json()
+    assert groups_body["matching_observations"] <= observation_body["pagination"]["total"]
+    assert groups_body["query_area"]["requested_bbox_wsen"] == [89.9, 21.9, 90.051, 22.051]
+    assert all(89.9 <= group["centroid"]["longitude"] <= 90.051
+               and 21.9 <= group["centroid"]["latitude"] <= 22.051
+               for group in groups_body["groups"])
+
+    export = client.post("/api/v1/exports", json={
+        "dataset_type": "observations", "format": "json", **params,
+    })
+    assert export.status_code == 200
+    export_body = export.json()
+    assert len(export_body["data"]) == observation_body["pagination"]["total"]
+    assert export_body["metadata_manifest"]["filters"]["area_selection"]["requested_bbox_wsen"] == [89.9, 21.9, 90.051, 22.051]
+
+    calendar_export = client.post("/api/v1/exports", json={
+        "dataset_type": "calendar", "format": "json", **params,
+    })
+    assert calendar_export.status_code == 200
+    calendar_export_body = calendar_export.json()
+    assert calendar_export_body["metadata_manifest"]["filters"]["area_selection"]["requested_bbox_wsen"] == [89.9, 21.9, 90.051, 22.051]
+    assert sum(row["observation_count"] for row in calendar_export_body["data"]) == observation_body["pagination"]["total"]
+
+
+def test_map_selected_area_rejects_invalid_or_disjoint_bounds(client):
+    common = {"aoi_id": "demo-aoi", "start": "2024-01-01", "end": "2024-02-01"}
+    for bounds, code in (("90,22,89,23", "INVALID_AREA_BOUNDS"), ("100,40,101,41", "AREA_OUTSIDE_AOI")):
+        response = client.get("/api/v1/map-density", params={**common, "bounds": bounds})
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == code
 
 
 def test_observation_quality_filters_keep_sensor_semantics(client):
@@ -537,7 +596,7 @@ def test_export_applies_quality_filters_and_records_them(client):
     assert body["metadata_manifest"]["filters"] == {
         "sensors": None, "platforms": None, "products": None,
         "min_frp_native": 12.0, "daynight": "N", "min_modis_confidence": 80.0,
-        "viirs_confidence_classes": ["H"],
+        "viirs_confidence_classes": ["H"], "area_selection": None,
     }
 
 

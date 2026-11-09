@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
+from shapely.geometry import box as geometry_box
 
 from backend.calendar_agg import COUNT_UNIT, METHOD_VERSION, SPATIAL_RULE
 from backend.calendar_agg.aggregation import (
@@ -91,6 +93,31 @@ def _get_configured_aoi(db: Database, aoi_id: str) -> dict[str, Any]:
     if aoi is None:
         raise error(404, "AOI_NOT_FOUND", "AOI not found.")
     return aoi
+
+
+def _resolve_area(aoi: dict[str, Any], bounds: str | None):
+    """Resolve an optional west,south,east,north selection inside its AOI."""
+    parent_geometry = aoi["geometry"]
+    if not bounds:
+        return parent_geometry, None
+    try:
+        coordinates = [float(value.strip()) for value in bounds.split(",")]
+    except (TypeError, ValueError):
+        raise error(422, "INVALID_AREA_BOUNDS", "Area bounds must be four comma-separated numbers: west,south,east,north.")
+    if len(coordinates) != 4:
+        raise error(422, "INVALID_AREA_BOUNDS", "Area bounds must be four comma-separated numbers: west,south,east,north.")
+    west, south, east, north = coordinates
+    if not all(map(math.isfinite, coordinates)) or not (-180 <= west < east <= 180) or not (-90 <= south < north <= 90):
+        raise error(422, "INVALID_AREA_BOUNDS", "Area bounds need valid WGS 84 coordinates with west < east and south < north.")
+    requested_geometry = geometry_box(west, south, east, north)
+    query_geometry = requested_geometry.intersection(parent_geometry)
+    if query_geometry.is_empty or query_geometry.area <= 0:
+        raise error(422, "AREA_OUTSIDE_AOI", "Selected bounds do not overlap the configured national query area.")
+    return query_geometry, {
+        "requested_bbox_wsen": coordinates,
+        "query_bbox_wsen": list(query_geometry.bounds),
+        "clipped_to_parent_aoi": not parent_geometry.covers(requested_geometry),
+    }
 
 
 @router.get("/health")
@@ -318,6 +345,7 @@ def _build_calendar_rows(
 @router.get("/observations")
 def observations(
     aoi_id: str | None = None,
+    bounds: str | None = Query(default=None),
     sensors: str | None = Query(default=None),
     platforms: str | None = Query(default=None),
     products: str | None = Query(default=None),
@@ -339,9 +367,12 @@ def observations(
     if confidence_classes and set(confidence_classes) - {"L", "N", "H"}:
         raise error(422, "INVALID_CONFIDENCE_CLASS", "VIIRS confidence classes must be L, N, or H.")
     aoi_geometry = None
+    area_selection = None
     if aoi_id:
         aoi = _get_configured_aoi(db, aoi_id)
-        aoi_geometry = aoi["geometry"]
+        aoi_geometry, area_selection = _resolve_area(aoi, bounds)
+    elif bounds:
+        raise error(422, "AOI_REQUIRED", "Area bounds require a configured aoi_id.")
     rows, total = db.query_observations(
         sensors=[s.strip() for s in sensors.split(",")] if sensors else None,
         platforms=[p.strip() for p in platforms.split(",")] if platforms else None,
@@ -360,6 +391,7 @@ def observations(
     return {
         "data": [_serialize(r) for r in rows],
         "pagination": {"page": page, "page_size": page_size, "total": total},
+        "query_area": area_selection,
         "count_unit_note": "One row = one source observation, not one fire.",
     }
 
@@ -369,6 +401,7 @@ def map_density(
     aoi_id: str,
     start: str,
     end: str,
+    bounds: str | None = Query(default=None),
     sensors: str | None = Query(default=None),
     platforms: str | None = Query(default=None),
     products: str | None = Query(default=None),
@@ -380,6 +413,7 @@ def map_density(
     db: Database = Depends(locked_db),
 ) -> dict[str, Any]:
     aoi = _get_configured_aoi(db, aoi_id)
+    aoi_geometry, area_selection = _resolve_area(aoi, bounds)
     start_dt, end_dt = _parse_dt(start, "start"), _parse_dt(end, "end")
     if not start_dt or not end_dt or end_dt <= start_dt:
         raise error(422, "INVALID_DATE_RANGE", "A valid start/end range is required.")
@@ -389,7 +423,7 @@ def map_density(
     if classes and set(classes) - {"L", "N", "H"}:
         raise error(422, "INVALID_CONFIDENCE_CLASS", "VIIRS confidence classes must be L, N, or H.")
     cells = db.query_map_density(
-        aoi_geometry=aoi["geometry"], start=start_dt, end=end_dt, grid_degrees=grid_degrees,
+        aoi_geometry=aoi_geometry, start=start_dt, end=end_dt, grid_degrees=grid_degrees,
         sensors=[value.strip() for value in sensors.split(",") if value.strip()] if sensors else None,
         platforms=[value.strip() for value in platforms.split(",") if value.strip()] if platforms else None,
         products=[value.strip() for value in products.split(",") if value.strip()] if products else None,
@@ -398,6 +432,7 @@ def map_density(
     )
     return {
         "aoi_id": aoi_id,
+        "query_area": area_selection,
         "period": {"start": start_dt.isoformat(), "end": end_dt.isoformat(), "time_zone": "UTC"},
         "cell_size_degrees": grid_degrees,
         "cells": cells,
@@ -424,6 +459,7 @@ def hotspot_groups(
     aoi_id: str,
     start: str,
     end: str,
+    bounds: str | None = Query(default=None),
     sensor: str | None = None,
     platform: str | None = None,
     product_id: str | None = None,
@@ -432,13 +468,14 @@ def hotspot_groups(
     db: Database = Depends(locked_db),
 ) -> dict[str, Any]:
     aoi = _get_configured_aoi(db, aoi_id)
+    aoi_geometry, area_selection = _resolve_area(aoi, bounds)
     start_dt, end_dt = _parse_dt(start, "start"), _parse_dt(end, "end")
     if not start_dt or not end_dt or end_dt <= start_dt:
         raise error(422, "INVALID_DATE_RANGE", "A valid start/end range is required.")
     if (end_dt - start_dt).total_seconds() > 90 * 86400:
         raise error(422, "WINDOW_TOO_LARGE", "Hotspot grouping requests are limited to 90 days; query shorter periods.")
     filters = {
-        "aoi_geometry": aoi["geometry"],
+        "aoi_geometry": aoi_geometry,
         "start": start_dt,
         "end": end_dt,
         "sensors": [sensor] if sensor else None,
@@ -455,6 +492,7 @@ def hotspot_groups(
     groups = cluster_observations(rows, distance_m=distance_m, max_gap_hours=max_gap_hours)
     return {
         "aoi": {"aoi_id": aoi_id, "name": aoi["name"]},
+        "query_area": area_selection,
         "period": {"start": start_dt.isoformat(), "end": end_dt.isoformat(), "time_zone": "UTC"},
         "filters": {
             "sensor": sensor,
@@ -462,6 +500,7 @@ def hotspot_groups(
             "product_id": product_id,
             "max_gap_hours": max_gap_hours,
             "distance_m": distance_m,
+            "area_selection": area_selection,
         },
         "source_snapshot_ids": sorted({
             str(row["source_snapshot_id"])
@@ -494,6 +533,7 @@ def calendar(
     aoi_id: str,
     start: str,
     end: str,
+    bounds: str | None = Query(default=None),
     sensors: str | None = Query(default=None),
     platforms: str | None = Query(default=None),
     products: str | None = Query(default=None),
@@ -504,6 +544,7 @@ def calendar(
     db: Database = Depends(locked_db),
 ) -> dict[str, Any]:
     aoi = _get_configured_aoi(db, aoi_id)
+    geometry, area_selection = _resolve_area(aoi, bounds)
     start_dt, end_dt = _parse_dt(start, "start"), _parse_dt(end, "end")
     if not start_dt or not end_dt or end_dt <= start_dt:
         raise error(422, "INVALID_DATE_RANGE", "A valid start/end range is required.")
@@ -520,7 +561,6 @@ def calendar(
     selected_sensors = [value.strip() for value in sensors.split(",") if value.strip()] if sensors else None
     selected_platforms = [value.strip() for value in platforms.split(",") if value.strip()] if platforms else None
     selected_products = [value.strip() for value in products.split(",") if value.strip()] if products else None
-    geometry = aoi["geometry"]
     rows = _build_calendar_rows(
         db, aoi_id=aoi_id, aoi_geometry=geometry, start=start_dt, end=end_dt,
         sensors=selected_sensors, platforms=selected_platforms, products=selected_products,
@@ -533,6 +573,7 @@ def calendar(
         grouped.setdefault((r["sensor"], r.get("platform") or "", r.get("product_id") or ""), []).append(r)
     return {
         "aoi": {"aoi_id": aoi_id, "name": aoi["name"], "crs": aoi["crs"]},
+        "query_area": area_selection,
         "period": {"start": start_dt.isoformat(), "end": end_dt.isoformat(), "time_zone": "UTC"},
         "time_bin": "month",
         "count_unit": COUNT_UNIT,
@@ -586,6 +627,7 @@ class ExportRequest(BaseModel):
     dataset_type: str = Field(default="observations", pattern="^(observations|calendar)$")
     format: str = Field(default="csv", pattern="^(csv|json|geojson)$")
     aoi_id: str | None = None
+    bounds: str | None = None
     start: str | None = None
     end: str | None = None
     sensors: list[str] | None = None
@@ -612,12 +654,12 @@ CALENDAR_EXPORT_FIELDS = [
 ]
 
 
-def _all_filtered_observations(req: ExportRequest, db: Database, aoi: dict[str, Any] | None,
+def _all_filtered_observations(req: ExportRequest, db: Database, aoi_geometry,
                                start_dt: datetime | None, end_dt: datetime | None) -> list[dict[str, Any]]:
     filters = {
         "sensors": req.sensors, "platforms": req.platforms, "products": req.products,
         "start": start_dt, "end": end_dt,
-        "aoi_geometry": aoi["geometry"] if aoi else None,
+        "aoi_geometry": aoi_geometry,
         "include_native": True, "min_frp_native": req.min_frp_native,
         "daynight": req.daynight, "min_modis_confidence": req.min_modis_confidence,
         "viirs_confidence_classes": req.viirs_confidence_classes,
@@ -675,15 +717,18 @@ def export(req: ExportRequest, db: Database = Depends(locked_db)) -> Response:
     if req.viirs_confidence_classes and set(value.strip().upper() for value in req.viirs_confidence_classes) - {"L", "N", "H"}:
         raise error(422, "INVALID_CONFIDENCE_CLASS", "VIIRS confidence classes must be L, N, or H.")
     aoi = _get_configured_aoi(db, req.aoi_id) if req.aoi_id else None
+    if req.bounds and aoi is None:
+        raise error(422, "AOI_REQUIRED", "Area bounds require a configured aoi_id.")
+    area_geometry, area_selection = _resolve_area(aoi, req.bounds) if aoi else (None, None)
     if req.dataset_type == "observations":
-        rows = _all_filtered_observations(req, db, aoi, start_dt, end_dt)
+        rows = _all_filtered_observations(req, db, area_geometry, start_dt, end_dt)
     else:
         if not req.aoi_id:
             raise error(422, "AOI_REQUIRED", "aoi_id is required for calendar exports.")
         if not start_dt or not end_dt:
             raise error(422, "DATE_RANGE_REQUIRED", "Calendar exports require both start and end dates.")
         rows = _build_calendar_rows(
-            db, aoi_id=req.aoi_id, aoi_geometry=aoi["geometry"], start=start_dt, end=end_dt,
+            db, aoi_id=req.aoi_id, aoi_geometry=area_geometry, start=start_dt, end=end_dt,
             sensors=req.sensors, platforms=req.platforms, products=req.products,
             min_frp_native=req.min_frp_native, daynight=req.daynight,
             min_modis_confidence=req.min_modis_confidence,
@@ -710,7 +755,8 @@ def export(req: ExportRequest, db: Database = Depends(locked_db)) -> Response:
         filters={"sensors": req.sensors, "platforms": req.platforms, "products": req.products,
                  "min_frp_native": req.min_frp_native, "daynight": req.daynight,
                  "min_modis_confidence": req.min_modis_confidence,
-                 "viirs_confidence_classes": req.viirs_confidence_classes},
+                 "viirs_confidence_classes": req.viirs_confidence_classes,
+                 "area_selection": area_selection},
         snapshots=_export_source_snapshots(db, rows),
         row_count=len(rows),
         count_unit=COUNT_UNIT if req.dataset_type == "calendar" else None,

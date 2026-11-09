@@ -34,8 +34,7 @@ class Settings:
     aoi_ids: tuple[str, ...] = field(default_factory=_configured_aoi_ids)
     data_root: Path = field(default_factory=lambda: Path(os.environ.get("DATA_ROOT", str(PROJECT_ROOT / "data"))))
     db_path: Path = field(
-        # Keep the retired Sundarbans prototype store intact. The national
-        # loader writes this same default path; EMBERLENS_DB can still override.
+        # National Bangladesh store (sole active database); EMBERLENS_DB can override.
         default_factory=lambda: Path(os.environ.get("EMBERLENS_DB", str(BACKEND_DIR / "emberlens-bangladesh.duckdb")))
     )
     app_name: str = "EMBERLENS"

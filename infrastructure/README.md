@@ -1,55 +1,14 @@
-# Running and deploying EMBERLENS
+# Deployment note — native primary path, container archived
 
-The app can run as a single container: FastAPI serves both `/api/v1/*` and the
-compiled React app from the same origin. The national DuckDB file is persistent
-external data and is deliberately excluded from the image. The container startup
-check refuses to serve an empty or wrong-scope database.
-
-## Local Docker run
-
-Requirements: Docker Desktop with the Linux container engine running and Docker
-Compose v2. From the repository root in PowerShell:
+**Native Windows execution is the only supported workflow for current development and the competition presentation.** Run:
 
 ```powershell
-New-Item -ItemType Directory -Force deploy-data | Out-Null
-# Copy the validated database into deploy-data only after its writer has closed cleanly.
-Copy-Item backend/emberlens-bangladesh.duckdb deploy-data/emberlens-bangladesh.duckdb
-docker compose build
-docker compose up -d
-docker compose ps
-Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
+.\start_emberlens.ps1
+.\stop_emberlens.ps1
 ```
 
-Open `http://127.0.0.1:8080/`. Set `EMBERLENS_DATA_DIR` to the directory
-containing the database and `WEB_PORT` to change the host port. On Linux, set
-`EMBERLENS_UID`/`EMBERLENS_GID` to the directory owner so the API can write
-DuckDB WAL/checkpoint sidecars. Compose binds that directory read/write because
-DuckDB must create those files beside the database. The container filesystem is
-read-only outside `/tmp` and that mounted data directory. The only published
-port is the web/API port.
+See the root `README.md` ("Run natively") for prerequisites, URLs, and log locations. Docker is not required.
 
-To stop the local container:
+## Future cloud deployment (separate task)
 
-```powershell
-docker compose down
-```
-
-## Public host requirements
-
-- A host that runs Docker images, exposes the configured `PORT`, supports a
-  persistent writable disk, and can retain at least the database and its DuckDB
-  sidecar files. Do not rely on an ephemeral container filesystem.
-- Mount the prepared data directory at `/var/lib/emberlens`; keep the DB
-  filename `emberlens-bangladesh.duckdb`. Startup verifies the Bangladesh AOI,
-  both registered Standard products, and a non-empty observation table before
-  launching one API worker.
-- Terminate TLS at the host's HTTPS proxy/load balancer. Serve frontend and API
-  through the same public origin; this avoids exposing cross-origin API access.
-- Do not put the FIRMS MAP_KEY in the image or runtime environment. The deployed
-  showcase reads the frozen DuckDB snapshot and makes no NASA download requests.
-- Back up the DuckDB file only after the API has closed it cleanly. Keep the
-  validated raw CSVs and manifests as the recovery source.
-
-No public host, domain, TLS endpoint, or deployment credentials are configured
-in this repository yet. The container setup is portable; a public deployment
-still needs a hosting account and a persistent disk sized for the database.
+A previous container setup is preserved under `archive/future-cloud-deployment/docker/` (`Dockerfile`, `compose.yaml`, `.dockerignore`, `backend/container_start.py`). It was verified previously (single-container, FastAPI serving API + built SPA, DuckDB on a persistent bind mount, startup refusing an empty/wrong-scope database) and is kept for a future public deployment. It is not active, not part of the presentation, and not invoked by the native launcher. Re-verify it against then-current code before any cloud use; it still needs a host, persistent disk, TLS at the edge, and the DuckDB filename `emberlens-bangladesh.duckdb` mounted at `/var/lib/emberlens`.

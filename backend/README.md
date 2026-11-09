@@ -36,16 +36,16 @@ and `EMBERLENS_AOI_IDS` (comma-separated AOI allowlist; defaults to `bangladesh-
 
 ## Seed from local CSVs
 
-The FIRMS acquisition module (`backend/ingestion/`, owned by the data agent)
-is not yet present. Until it lands, use the equivalent local loader:
+The national snapshot is loaded with `scripts/load_national_data.py` into the
+national DuckDB (`backend/emberlens-bangladesh.duckdb`). For one-off local
+experiments the equivalent loader is:
 
 ```python
 from backend.db.database import init_db
 from backend.local_loader import load_csv
 
-db = init_db("backend/emberlens.duckdb")
-load_csv(db, "data/raw/modis_2024.csv", sensor="MODIS", product_id="MODIS_NRT")
-load_csv(db, "data/raw/viirs_2024.csv", sensor="VIIRS", product_id="VNP14IM")
+db = init_db("backend/emberlens-bangladesh.duckdb")
+load_csv(db, "data/raw/MODIS_SP_2010-01-01_2026-07-31_bangladesh-bd.csv", sensor="MODIS", product_id="MODIS_SP", platform="Terra+Aqua", processing_level="Standard (science quality, SP)", collection_version="Collection 6.1 (MCD14IM / MCD14DL)")
 ```
 
 `load_csv` validates rows, maps them to the canonical schema
