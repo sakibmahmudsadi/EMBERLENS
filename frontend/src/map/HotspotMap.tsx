@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -9,70 +9,326 @@ maplibregl.setWorkerUrl(mapLibreWorkerUrl);
 const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const AOI_URL = '/aoi/bangladesh-national.geojson';
 const COUNTRY_OUTLINE_URL = '/aoi/bangladesh-country-outline.geojson';
-type AreaBounds = [number, number, number, number];
+export type AreaBounds = [number, number, number, number];
 
-export function HotspotMap({ cells, observations, selectedBounds, onViewBoundsChange, onSelect }: { cells: MapDensityCell[]; observations: ObservationListItem[]; selectedBounds: AreaBounds | null; onViewBoundsChange: (bounds: AreaBounds) => void; onSelect: (id: string) => void }) {
+export interface HotspotMapHandle {
+  flyTo: (center: [number, number], zoom?: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+  resize: () => void;
+}
+
+export interface HotspotMapProps {
+  cells: MapDensityCell[];
+  observations: ObservationListItem[];
+  selectedBounds: AreaBounds | null;
+  onViewBoundsChange: (bounds: AreaBounds) => void;
+  onSelect: (id: string) => void;
+}
+
+const DEFAULT_CENTER: [number, number] = [90.35, 23.6];
+const DEFAULT_ZOOM = 6.2;
+
+export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function HotspotMap(
+  { cells, observations, selectedBounds, onViewBoundsChange, onSelect },
+  ref,
+) {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [, setMapReady] = useState(false);
+
+  // Keep references to latest data for initial map load synchronization
+  const cellsRef = useRef(cells);
+  cellsRef.current = cells;
+  const observationsRef = useRef(observations);
+  observationsRef.current = observations;
+  const selectedBoundsRef = useRef(selectedBounds);
+  selectedBoundsRef.current = selectedBounds;
+
+  useImperativeHandle(ref, () => ({
+    flyTo: (center: [number, number], zoom?: number) => {
+      map.current?.flyTo({ center, zoom: zoom ?? 8.5, essential: true, duration: 1800 });
+    },
+    zoomIn: () => {
+      map.current?.zoomIn({ duration: 300 });
+    },
+    zoomOut: () => {
+      map.current?.zoomOut({ duration: 300 });
+    },
+    resetView: () => {
+      map.current?.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, essential: true, duration: 1600 });
+    },
+    resize: () => {
+      map.current?.resize();
+    },
+  }));
 
   useEffect(() => {
     if (!mapRef.current || map.current) return;
-    const m = new maplibregl.Map({ container: mapRef.current, style: STYLE, center: [90.35, 23.6], zoom: 6.2 });
+    const m = new maplibregl.Map({
+      container: mapRef.current,
+      style: STYLE,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      attributionControl: false,
+    });
     map.current = m;
-    m.addControl(new maplibregl.NavigationControl(), 'top-right');
+    (window as unknown as { __emberlens_map?: maplibregl.Map }).__emberlens_map = m;
+
+    m.on('error', (e) => {
+      console.error('[MAPLIBRE ERROR EVENT]', e.error ? e.error.message : e);
+    });
+
+    // Add scale control to bottom-left as seen in the reference visual
+    const scale = new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' });
+    m.addControl(scale, 'bottom-left');
+
     m.on('load', async () => {
+      // Fine-tune Carto Dark Matter style for a cinematic satellite cartography appearance
+      try {
+        if (m.getLayer('background')) {
+          m.setPaintProperty('background', 'background-color', '#070e17');
+        }
+        if (m.getLayer('water')) {
+          m.setPaintProperty('water', 'fill-color', '#091624');
+        }
+        if (m.getLayer('waterway')) {
+          m.setPaintProperty('waterway', 'line-color', '#0b1d30');
+        }
+        if (m.getLayer('boundary_country_outline')) {
+          m.setPaintProperty('boundary_country_outline', 'line-color', '#223547');
+          m.setPaintProperty('boundary_country_outline', 'line-width', 1);
+        }
+        if (m.getLayer('boundary_country_inner')) {
+          m.setPaintProperty('boundary_country_inner', 'line-color', '#2b4258');
+          m.setPaintProperty('boundary_country_inner', 'line-width', 1.2);
+        }
+        if (m.getLayer('place_country_1')) {
+          m.setPaintProperty('place_country_1', 'text-color', '#9eb1c7');
+          m.setPaintProperty('place_country_1', 'text-halo-color', '#070e17');
+          m.setPaintProperty('place_country_1', 'text-halo-width', 1.5);
+        }
+        if (m.getLayer('place_country_2')) {
+          m.setPaintProperty('place_country_2', 'text-color', '#8ca2b9');
+          m.setPaintProperty('place_country_2', 'text-halo-color', '#070e17');
+          m.setPaintProperty('place_country_2', 'text-halo-width', 1.2);
+        }
+        if (m.getLayer('watername_ocean')) {
+          m.setPaintProperty('watername_ocean', 'text-color', '#50677d');
+        }
+        if (m.getLayer('watername_sea')) {
+          m.setPaintProperty('watername_sea', 'text-color', '#556d84');
+        }
+      } catch {
+        /* Optional style property adjustment */
+      }
+
+      // Add national query bbox
       try {
         const res = await fetch(AOI_URL);
         const gj = await res.json();
         m.addSource('aoi', { type: 'geojson', data: gj });
-        m.addLayer({ id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#f97316', 'fill-opacity': 0.025 } });
-        m.addLayer({ id: 'aoi-line', type: 'line', source: 'aoi', paint: { 'line-color': '#f97316', 'line-width': 2, 'line-dasharray': [4, 2] } });
-      } catch { /* AOI optional; map still usable */ }
+        m.addLayer({
+          id: 'aoi-fill',
+          type: 'fill',
+          source: 'aoi',
+          paint: { 'fill-color': '#ff7315', 'fill-opacity': 0.015 },
+        });
+        m.addLayer({
+          id: 'aoi-line',
+          type: 'line',
+          source: 'aoi',
+          paint: {
+            'line-color': '#ff7315',
+            'line-width': 1.0,
+            'line-opacity': 0.0,
+          },
+        });
+      } catch {
+        /* AOI optional; map still usable */
+      }
+
+      // Add Bangladesh official reference outline (geoBoundaries 2015)
       try {
         const res = await fetch(COUNTRY_OUTLINE_URL);
         if (!res.ok) throw new Error(`Country outline request failed (${res.status})`);
         const outline = await res.json();
         m.addSource('country-outline', { type: 'geojson', data: outline });
-        m.addLayer({ id: 'country-outline-line', type: 'line', source: 'country-outline', paint: {
-          'line-color': '#dce8ee', 'line-width': 1.5, 'line-opacity': 0.9,
-        } });
-      } catch { /* Reference outline is optional; query AOI remains visible. */ }
-      m.addSource('density-cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'density-cells', type: 'circle', source: 'density-cells', paint: {
-        // National-history cells can contain many thousands of observations.
-        // Keep high-count cells legible at country scale instead of letting
-        // their circles merge into a solid overlay; zooming in reveals detail.
-        'circle-radius': ['step', ['get', 'max_series_count'], 1.8, 10, 2.3, 100, 3.2, 1000, 4.8, 10000, 7],
-        'circle-color': '#fb6b32', 'circle-stroke-color': '#ffd1b8', 'circle-stroke-width': 0.6,
-        'circle-opacity': 0.58,
-      } });
-      m.addSource('page-observations', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'page-observations', type: 'circle', source: 'page-observations', paint: {
-        'circle-radius': 3.5, 'circle-color': '#ffe0c9', 'circle-stroke-color': '#7c2d12',
-        'circle-stroke-width': 0.8, 'circle-opacity': 0.98,
-      } });
-      m.addSource('selected-area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      m.addLayer({ id: 'selected-area-fill', type: 'fill', source: 'selected-area', paint: {
-        'fill-color': '#43b8e5', 'fill-opacity': 0.06,
-      } });
-      m.addLayer({ id: 'selected-area-line', type: 'line', source: 'selected-area', paint: {
-        'line-color': '#67d4ff', 'line-width': 2.5, 'line-dasharray': [2, 1],
-      } });
-      m.on('click', 'page-observations', (e) => {
+        m.addLayer({
+          id: 'country-outline-glow',
+          type: 'line',
+          source: 'country-outline',
+          paint: {
+            'line-color': '#6c8fa8',
+            'line-width': 2.8,
+            'line-opacity': 0.25,
+            'line-blur': 1,
+          },
+        });
+        m.addLayer({
+          id: 'country-outline-line',
+          type: 'line',
+          source: 'country-outline',
+          paint: {
+            'line-color': '#9eb7ca',
+            'line-width': 1.2,
+            'line-opacity': 0.85,
+          },
+        });
+      } catch {
+        /* Reference outline is optional; query AOI remains visible */
+      }
+
+      // Hotspot density observation points - two layers for glowing ember effect
+      m.addSource('density-cells', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: cellsRef.current.map(cell => ({
+            type: 'Feature' as const,
+            geometry: { type: 'Point' as const, coordinates: [cell.longitude, cell.latitude] },
+            properties: { max_series_count: cell.max_series_count, series_json: JSON.stringify(cell.series) },
+          })),
+        },
+      });
+
+      // Layer 1: Radiant ember glow halo
+      m.addLayer({
+        id: 'density-cells-glow',
+        type: 'circle',
+        source: 'density-cells',
+        paint: {
+          'circle-radius': ['step', ['get', 'max_series_count'], 4.2, 10, 5.8, 100, 8.5, 1000, 12.5, 10000, 18.0],
+          'circle-color': '#ff3a00',
+          'circle-opacity': 0.55,
+          'circle-blur': 0.85,
+        },
+      });
+
+      // Layer 2: Intense fiery core with bright stroke
+      m.addLayer({
+        id: 'density-cells',
+        type: 'circle',
+        source: 'density-cells',
+        paint: {
+          'circle-radius': ['step', ['get', 'max_series_count'], 2.0, 10, 2.8, 100, 4.2, 1000, 6.0, 10000, 8.5],
+          'circle-color': [
+            'step', ['get', 'max_series_count'],
+            '#ff5500', 50,
+            '#ff7700', 500,
+            '#ffa010', 5000,
+            '#ffe066',
+          ],
+          'circle-stroke-color': '#fff6e5',
+          'circle-stroke-width': 0.6,
+          'circle-stroke-opacity': 0.85,
+          'circle-opacity': 0.95,
+        },
+      });
+
+      // Page observations (active feed points drilldown)
+      m.addSource('page-observations', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: observationsRef.current.map(observation => ({
+            type: 'Feature' as const,
+            geometry: { type: 'Point' as const, coordinates: [observation.longitude, observation.latitude] },
+            properties: { observation_id: observation.observation_id },
+          })),
+        },
+      });
+      m.addLayer({
+        id: 'page-observations-glow',
+        type: 'circle',
+        source: 'page-observations',
+        paint: {
+          'circle-radius': 7.0,
+          'circle-color': '#ff6000',
+          'circle-opacity': 0.6,
+          'circle-blur': 0.7,
+        },
+      });
+      m.addLayer({
+        id: 'page-observations',
+        type: 'circle',
+        source: 'page-observations',
+        paint: {
+          'circle-radius': 3.6,
+          'circle-color': '#ffffff',
+          'circle-stroke-color': '#ff4900',
+          'circle-stroke-width': 1.4,
+          'circle-opacity': 1.0,
+        },
+      });
+
+      // Selected area bounds box
+      const [west, south, east, north] = selectedBoundsRef.current ?? [0, 0, 0, 0];
+      m.addSource('selected-area', {
+        type: 'geojson',
+        data: selectedBoundsRef.current
+          ? {
+              type: 'FeatureCollection',
+              features: [
+                {
+                  type: 'Feature',
+                  geometry: {
+                    type: 'Polygon',
+                    coordinates: [
+                      [
+                        [west, south],
+                        [east, south],
+                        [east, north],
+                        [west, north],
+                        [west, south],
+                      ],
+                    ],
+                  },
+                  properties: {},
+                },
+              ],
+            }
+          : { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: 'selected-area-fill',
+        type: 'fill',
+        source: 'selected-area',
+        paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.05 },
+      });
+      m.addLayer({
+        id: 'selected-area-line',
+        type: 'line',
+        source: 'selected-area',
+        paint: { 'line-color': '#38bdf8', 'line-width': 1.8, 'line-dasharray': [3, 2] },
+      });
+
+      // Interactions
+      m.on('click', 'page-observations', e => {
         const id = e.features?.[0]?.properties?.observation_id;
         if (id) onSelect(String(id));
       });
-      m.on('mouseenter', 'page-observations', () => { m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', 'page-observations', () => { m.getCanvas().style.cursor = ''; });
-      m.on('click', 'density-cells', (e) => {
+      m.on('mouseenter', 'page-observations', () => {
+        m.getCanvas().style.cursor = 'pointer';
+      });
+      m.on('mouseleave', 'page-observations', () => {
+        m.getCanvas().style.cursor = '';
+      });
+
+      m.on('click', 'density-cells', e => {
         const f = e.features?.[0];
         if (!f?.properties) return;
         let series: { sensor: string; platform: string; product_id: string; observation_count: number }[] = [];
-        try { series = JSON.parse(String(f.properties.series_json ?? '[]')); } catch { /* invalid map property */ }
+        try {
+          series = JSON.parse(String(f.properties.series_json ?? '[]'));
+        } catch {
+          /* invalid map property */
+        }
         const content = document.createElement('div');
+        content.className = 'map-cell-popup';
         const heading = document.createElement('strong');
-        heading.textContent = 'Detection records in this grid cell';
+        heading.textContent = 'Detections in Grid Cell';
         content.appendChild(heading);
         for (const item of series) {
           const row = document.createElement('p');
@@ -80,30 +336,53 @@ export function HotspotMap({ cells, observations, selectedBounds, onViewBoundsCh
           content.appendChild(row);
         }
         const note = document.createElement('small');
-        note.textContent = 'Counts remain separated by sensor/product; this cell is not a fire perimeter.';
+        note.textContent = 'Counts stay sensor-specific; cell is an observation location, not a fire perimeter.';
         content.appendChild(note);
-        new maplibregl.Popup({ closeButton: true, maxWidth: '320px' }).setLngLat(e.lngLat).setDOMContent(content).addTo(m);
+        new maplibregl.Popup({ closeButton: true, maxWidth: '320px', className: 'ember-popup' })
+          .setLngLat(e.lngLat)
+          .setDOMContent(content)
+          .addTo(m);
       });
-      m.on('mouseenter', 'density-cells', () => { m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', 'density-cells', () => { m.getCanvas().style.cursor = ''; });
+      m.on('mouseenter', 'density-cells', () => {
+        m.getCanvas().style.cursor = 'pointer';
+      });
+      m.on('mouseleave', 'density-cells', () => {
+        m.getCanvas().style.cursor = '';
+      });
+
       const reportViewBounds = () => {
         const bounds = m.getBounds();
         onViewBoundsChange([
-          Number(bounds.getWest().toFixed(4)), Number(bounds.getSouth().toFixed(4)),
-          Number(bounds.getEast().toFixed(4)), Number(bounds.getNorth().toFixed(4)),
+          Number(bounds.getWest().toFixed(4)),
+          Number(bounds.getSouth().toFixed(4)),
+          Number(bounds.getEast().toFixed(4)),
+          Number(bounds.getNorth().toFixed(4)),
         ]);
       };
       m.on('moveend', reportViewBounds);
       reportViewBounds();
       setMapReady(true);
     });
-    return () => { m.remove(); map.current = null; setMapReady(false); };
+
+    // ResizeObserver on container to guarantee smooth responsiveness
+    const ro = new ResizeObserver(() => {
+      m.resize();
+    });
+    ro.observe(mapRef.current);
+
+    return () => {
+      ro.disconnect();
+      m.remove();
+      map.current = null;
+      setMapReady(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    cellsRef.current = cells;
     const m = map.current;
-    if (!m || !mapReady || !m.isStyleLoaded()) return;
+    if (!m) return;
     const src = m.getSource('density-cells') as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
     src.setData({
@@ -114,11 +393,12 @@ export function HotspotMap({ cells, observations, selectedBounds, onViewBoundsCh
         properties: { max_series_count: cell.max_series_count, series_json: JSON.stringify(cell.series) },
       })),
     });
-  }, [cells, mapReady]);
+  }, [cells]);
 
   useEffect(() => {
+    observationsRef.current = observations;
     const m = map.current;
-    if (!m || !mapReady || !m.isStyleLoaded()) return;
+    if (!m) return;
     const src = m.getSource('page-observations') as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
     src.setData({
@@ -129,27 +409,45 @@ export function HotspotMap({ cells, observations, selectedBounds, onViewBoundsCh
         properties: { observation_id: observation.observation_id },
       })),
     });
-  }, [observations, mapReady]);
+  }, [observations]);
 
   useEffect(() => {
+    selectedBoundsRef.current = selectedBounds;
     const m = map.current;
-    if (!m || !mapReady || !m.isStyleLoaded()) return;
+    if (!m) return;
     const source = m.getSource('selected-area') as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
     const [west, south, east, north] = selectedBounds ?? [0, 0, 0, 0];
-    source.setData(selectedBounds ? {
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] },
-        properties: {},
-      }],
-    } : { type: 'FeatureCollection', features: [] });
-  }, [selectedBounds, mapReady]);
+    source.setData(
+      selectedBounds
+        ? {
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [
+                    [
+                      [west, south],
+                      [east, south],
+                      [east, north],
+                      [west, north],
+                      [west, south],
+                    ],
+                  ],
+                },
+                properties: {},
+              },
+            ],
+          }
+        : { type: 'FeatureCollection', features: [] },
+    );
+  }, [selectedBounds]);
 
   return (
-    <div className="map-wrap">
-      <div ref={mapRef} aria-label="Map of aggregated fire-observation grid cells" />
+    <div className="map-viewport">
+      <div ref={mapRef} className="maplibre-container" aria-label="Geospatial Map of Active-Fire Hotspots" />
     </div>
   );
-}
+});

@@ -1,10 +1,20 @@
 # Project Status
 
-**Last verified:** 2026-11-08
+**Last verified:** 2026-11-11
 **Active scope:** Bangladesh task-specified bounding box (`bangladesh-bd`), NASA FIRMS Standard products MODIS_SP + VIIRS_SNPP_SP, inclusive request window 2010-01-01–2026-07-31.
 
 ## Verified working
 
+- **Geospatial Intelligence UI Transformation (2026-11-11):** Transformed frontend into an edge-to-edge dark satellite cartographic interface matching the NASA Space Apps Challenge visual direction.
+  - Full-screen MapLibre canvas with customized Carto Dark Matter basemap (deep obsidian land `#070e17`, dark navy ocean `#091624`, silver geographic labels `#9eb1c7`).
+  - Double-layer glowing ember observation circles (`density-cells-glow` + `density-cells`) rendering 3,174 spatial cells across Bangladesh bounding box (`[88.0, 20.5, 92.7, 26.7]`) with radiant halos and intense fiery cores (`#ff5500` → `#ffe066`).
+  - Floating bottom-center filter dock (`FilterDock.tsx`) with 4 segments (`Sensors`, `Period`, `Confidence`, `Fire Activity`), expandable popovers preserving sensor separation, date presets, and sensor-specific confidence semantics (MODIS numeric 0–100 vs VIIRS categorical L/N/H).
+  - Functional place search (`PlaceSearch.tsx`) with `/` keyboard shortcut, MapLibre smooth flyTo navigation, and bounding box sub-area filtering.
+  - Expandable analytical drawer (`AnalyticsDrawer.tsx`) housing the 199-month `CalendarMatrix`, `SeasonalityProfile`, observation inspection drilldown, spatiotemporal `HotspotGroupsPanel`, and metadata-backed `ExportPanel`.
+  - Floating controls stack (`FloatingControls.tsx`) with zoom, view reset, dynamic map scale bracket, and annual history playback.
+- **Backend Test Suite:** **73 passed, 0 failed** in `pytest -q`; `ruff check .` passed with zero errors.
+- **Frontend Production Build:** `npm run build` (`tsc -b && vite build`) passed with zero errors; `npm audit --omit=dev` reports zero vulnerabilities.
+- **Headless Browser CDP Verification:** Verified at `1920×1080`, `1440×900`, and `1366×768` with zero console errors, full WebGL initialization, popover interaction, and drawer switching.
 - Raw snapshots and passing manifests exist for both registered products. MODIS_SP: 147,536 rows (record dates 2010-01-01–2026-07-25); VIIRS_SNPP_SP: 520,949 rows (2012-01-20–2026-07-28).
 - The active database `backend/emberlens-bangladesh.duckdb` contains 668,485 observations, the Bangladesh AOI, product snapshots, two broad FIRMS availability intervals, and 118 date-level FIRMS Standard missing-day entries. The retired Sundarbans database is isolated.
 - API process on `127.0.0.1:8000` currently reports health `ok`. It was started before the latest quality-filter/map-density changes and does not run with auto-reload; live `/api/v1/map-density` returns 404, so a restart is needed before those routes are available. Source snapshots and availability endpoints worked in the prior verification. Full-window calendar returned 199 bins per series; months with a matching known FIRMS missing date were marked `partial_source_data`.
