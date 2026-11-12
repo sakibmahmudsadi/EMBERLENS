@@ -80,7 +80,7 @@ export function CalendarMatrix({ data, onInspect }: {
 
   return (
     <section className="panel" aria-label="Burning-activity calendar">
-      <h2>Burning-activity calendar — month × year</h2>
+      <div className="calendar-heading"><h2>Burning activity · month × year</h2><span>199 months</span></div>
       <div className="cal-tabs" role="tablist" aria-label="Sensor series">
         {data.series.map((s, i) => (
           <button key={`${seriesKey(s)}-${i}`} type="button" role="tab" aria-selected={i === activeSeries} className="chip" onClick={() => { setActiveSeriesKey(seriesKey(s)); setSelectedPeriod(null); }}>
@@ -88,28 +88,33 @@ export function CalendarMatrix({ data, onInspect }: {
           </button>
         ))}
       </div>
-      <p className="calendar-intro">
-        Monthly satellite observation records for {data.aoi.name}. Shading is scaled within the selected sensor series; compare sensors separately.
+      <p className="calendar-intro" title="Monthly satellite observation records. Shading is scaled within the selected sensor series; compare sensors separately.">
+        {data.aoi.name} · monthly source records · scale is relative to the selected sensor
       </p>
       <details className="calendar-method">
-        <summary>How to read this calendar</summary>
+        <summary>Reading the shading & coverage</summary>
         <p>Counts are source observation records after exact deduplication within each product snapshot. Sensors are never merged. Solid left bar means records were returned; an amber outline marks FIRMS-reported missing source dates; hatching means no records were returned. Empty months do not mean zero fire activity.</p>
         <p className="calendar-metadata">Period: {data.period.start} → {data.period.end} ({data.period.time_zone}) · Time bin: {data.time_bin} · Spatial rule: {data.spatial_rule} · Method: {data.method_version} · Count unit: <code className="mono">{data.count_unit}</code></p>
+        {data.limitations.length > 0 && <p>Limitations: {data.limitations.join('; ')}</p>}
       </details>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="cal-grid-scroll-region">
         <div className="cal-grid" role="grid" aria-label={`Calendar for ${series.sensor} ${series.platform}`}>
           <div className="cal-head">YEAR</div>
           {MONTHS.map(m => <div key={m} className="cal-head" aria-hidden>{m}</div>)}
           {years.map(y => {
             const cells = MONTHS.map((m, mi) => {
               const v = series.values.find(x => x.period_start.startsWith(`${y}-${String(mi + 1).padStart(2, '0')}`));
+              const countLabel = !v || (v.observation_count === 0 && v.coverage_status !== 'records_present')
+                ? '—'
+                : v.observation_count.toLocaleString();
               return (
                 <button key={`${y}-${mi}`} type="button" role="gridcell" className="cal-cell" data-status={v?.coverage_status ?? 'coverage_unknown'}
                   style={{ backgroundColor: v ? shade(v.observation_count, max) : undefined, opacity: v ? 1 : 0.5 }}
                   aria-selected={Boolean(v && selected?.period_start === v.period_start)}
-                  aria-label={`${m} ${y}: ${v ? `${v.observation_count} observations, ${coverageStatusLabel(v.coverage_status)}` : 'no data'}`}
+                  aria-label={`${m} ${y}: ${v ? v.observation_count === 0 && v.coverage_status !== 'records_present' ? `no source records returned; ${coverageStatusLabel(v.coverage_status)}` : `${v.observation_count} observations, ${coverageStatusLabel(v.coverage_status)}` : 'no source data returned; coverage unknown'}`}
+                  title={`${m} ${y}: ${v ? `${countLabel} records · ${coverageStatusLabel(v.coverage_status)}` : 'No source data returned · coverage unknown'}`}
                   onClick={() => v && setSelectedPeriod(v.period_start)}>
-                  <span className="cnt">{v ? v.observation_count : '—'}</span>
+                  <span className="cnt">{countLabel}</span>
                   <span className="st">{v ? coverageStatusLabel(v.coverage_status) : 'No data'}</span>
                 </button>
               );
@@ -119,7 +124,8 @@ export function CalendarMatrix({ data, onInspect }: {
         </div>
       </div>
       {selected && (
-        <div className="cal-detail" aria-live="polite">
+        <details className="cal-detail" aria-live="polite">
+          <summary>{selected.period_start.slice(0, 7)} · {selected.observation_count === 0 && selected.coverage_status !== 'records_present' ? 'no source records' : `${selected.observation_count.toLocaleString()} records`} · {coverageStatusLabel(selected.coverage_status)} <span>Open provenance &amp; context</span></summary>
           <h3>{series.sensor} · {series.platform} · {series.product_id}</h3>
           <dl className="kv">
             <dt>Period</dt><dd>{selected.period_start} → {selected.period_end}</dd>
@@ -149,9 +155,8 @@ export function CalendarMatrix({ data, onInspect }: {
           <button type="button" className="outline-button" onClick={() => onInspect?.(series, selected)}>
             Inspect source observations for this month
           </button>
-        </div>
+        </details>
       )}
-      {data.limitations.length > 0 && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Limitations: {data.limitations.join('; ')}</p>}
     </section>
   );
 }

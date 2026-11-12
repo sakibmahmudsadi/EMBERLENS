@@ -29,6 +29,9 @@ export interface FilterDockProps {
 
   // Loading state indicator
   loading?: boolean;
+
+  // Optional extra action button (e.g. Download Data)
+  extraAction?: React.ReactNode;
 }
 
 export function FilterDock({
@@ -43,6 +46,7 @@ export function FilterDock({
   isDrawerOpen,
   onToggleDrawer,
   loading = false,
+  extraAction,
 }: FilterDockProps) {
   const [activePopover, setActivePopover] = useState<'sensors' | 'period' | 'confidence' | 'activity' | null>(null);
 
@@ -502,8 +506,9 @@ export function FilterDock({
           type="button"
           className="dock-expand-toggle"
           onClick={onToggleDrawer}
-          title={isDrawerOpen ? 'Collapse Analytics Drawer' : 'Expand Monthly Calendar & Analytics'}
+          title={isDrawerOpen ? 'Return to Map' : 'Open Place Analysis'}
           aria-expanded={isDrawerOpen}
+          aria-label={isDrawerOpen ? 'Close Place Analysis and return to map' : 'Open Place Analysis'}
         >
           <svg
             className={`dock-chevron-icon ${isDrawerOpen ? 'is-flipped' : ''}`}
@@ -593,6 +598,12 @@ export function FilterDock({
             </div>
           </div>
         </div>
+
+        {extraAction && (
+          <div className="dock-extra-action">
+            {extraAction}
+          </div>
+        )}
 
         {loading && <div className="dock-loading-pulse" title="Updating observation data..." />}
       </nav>

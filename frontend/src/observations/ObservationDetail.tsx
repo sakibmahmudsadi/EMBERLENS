@@ -31,32 +31,33 @@ export function ObservationDetailPanel({ id }: { id: string | null }) {
     api.observationDetail(id).then(d => setDetail(d)).catch(e => setErr(String(e))).finally(() => setLoading(false));
   }, [id]);
 
-  if (!id) return <section className="panel"><h2>Observation detail</h2><Empty msg="Select a point on the map or a row in the list to inspect provenance." /></section>;
-  if (loading) return <section className="panel"><h2>Observation detail</h2><Loading label={`Loading ${id}…`} /></section>;
-  if (err) return <section className="panel"><h2>Observation detail</h2><ErrorState msg={err} /></section>;
-  if (!detail) return <section className="panel"><h2>Observation detail</h2><Empty /></section>;
+  if (!id) return <section className="panel observation-detail-panel"><h2>Observation detail</h2><Empty msg="Select a point on the map or a row in the list to inspect provenance." /></section>;
+  if (loading) return <section className="panel observation-detail-panel"><h2>Observation detail</h2><Loading label={`Loading ${id}…`} /></section>;
+  if (err) return <section className="panel observation-detail-panel"><h2>Observation detail</h2><ErrorState msg={err} /></section>;
+  if (!detail) return <section className="panel observation-detail-panel"><h2>Observation detail</h2><Empty /></section>;
 
   const frp = detail.frp_mw ?? detail.frp_native;
   const native = { ...asRecord(detail.native_fields), ...asRecord(detail.source_attributes) };
   const keys = Object.keys(native);
 
   return (
-    <section className="panel" aria-label="Observation detail">
-      <h2>Observation detail</h2>
-      <dl className="kv">
+    <section className="panel observation-detail-panel" aria-label="Observation detail">
+      <div className="detail-panel-heading"><div><span className="activity-insight-kicker"><i /> SOURCE RECORD</span><h2>Observation detail</h2></div><span className="detail-sensor-tag">{detail.sensor} · {detail.platform}</span></div>
+      <div className="observation-detail-primary">
+        <div><span>ACQUIRED · UTC</span><strong>{detail.acquired_at_utc}</strong></div>
+        <div><span>COORDINATES</span><strong>{detail.latitude.toFixed(4)}, {detail.longitude.toFixed(4)}</strong></div>
+        <div><span>FRP</span><strong>{frp != null ? `${frp} MW` : 'Not supplied'}</strong><small>{frp != null ? `Source native: ${detail.frp_native ?? '—'} MW` : 'Null is not zero'}</small></div>
+        <div><span>CONFIDENCE</span><strong>{String(detail.confidence_raw ?? '—')}</strong><small>{detail.confidence_semantics}</small></div>
+      </div>
+      <details className="detail-disclosure"><summary>Product &amp; provenance</summary><dl className="kv">
         <dt>ID</dt><dd className="mono">{detail.observation_id}</dd>
-        <dt>Sensor / platform</dt><dd>{detail.sensor} · {detail.platform}</dd>
         <dt>Product</dt><dd>{detail.product_id}{detail.collection_version ? ` · ${detail.collection_version}` : ''}</dd>
-        <dt>Acquired (UTC)</dt><dd>{detail.acquired_at_utc}</dd>
-        <dt>Location</dt><dd>{detail.latitude}, {detail.longitude}</dd>
-        <dt>Confidence</dt><dd>Raw: <code className="mono">{String(detail.confidence_raw ?? '—')}</code> · Semantics: {detail.confidence_semantics}</dd>
-        <dt>FRP</dt><dd>{frp != null ? `${frp} MW (source-native ${detail.frp_native ?? '—'})` : 'Not supplied by source (null ≠ zero)'}</dd>
         <dt>Snapshot</dt><dd className="mono">{detail.source_snapshot_id}</dd>
         <dt>Fingerprint</dt><dd className="mono">{detail.source_row_fingerprint ?? '—'}</dd>
-      </dl>
-      <h3>Native fields</h3>
-      {keys.length ? <dl className="kv">{keys.map(k => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd className="mono">{String(native[k] ?? '—')}</dd></div>)}</dl> : <p style={{ fontSize: 13, color: 'var(--muted)' }}>No native fields returned.</p>}
-      <p style={{ fontSize: 12, color: 'var(--muted)' }}>A hotspot is a thermal-anomaly detection, not a confirmed wildfire. Coordinates are nominal pixel centres.</p>
+      </dl></details>
+      <details className="detail-disclosure"><summary>Native source fields <span>{keys.length}</span></summary>
+        {keys.length ? <dl className="kv">{keys.map(k => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd className="mono">{String(native[k] ?? '—')}</dd></div>)}</dl> : <p>No native fields returned.</p>}
+      </details>
     </section>
   );
 }

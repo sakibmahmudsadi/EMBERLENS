@@ -8,6 +8,8 @@ export interface PlaceItem {
   center: [number, number]; // [lng, lat]
   zoom: number;
   bounds?: AreaBounds;
+  boundaryIds?: string[];
+  description?: string;
 }
 
 const PLACES_CATALOG: PlaceItem[] = [
@@ -18,6 +20,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [90.35, 23.6],
     zoom: 6.2,
     bounds: [88.0, 20.5, 92.7, 26.7],
+    boundaryIds: ['bd-all'],
+    description: 'Comprehensive national query bounds encompassing Bangladesh and adjacent border regions across 16+ years of NASA active fire observations.',
   },
   {
     id: 'sundarbans',
@@ -26,6 +30,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [89.54, 21.95],
     zoom: 9.2,
     bounds: [89.0, 21.5, 90.0, 22.5],
+    boundaryIds: ['sundarbans'],
+    description: 'The Sundarbans is the world’s largest mangrove forest, located in the delta regions of Bangladesh and India. It is a UNESCO World Heritage Site and a critical ecosystem for biodiversity, coastal protection, and climate resilience.',
   },
   {
     id: 'cht',
@@ -34,6 +40,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [92.22, 22.5],
     zoom: 8.8,
     bounds: [91.8, 21.4, 92.7, 23.8],
+    boundaryIds: ['cht'],
+    description: 'Chittagong Hill Tracts is a rugged upland region characterized by montane evergreen forests, complex topography, and seasonal rotational cultivation (jhum) with active spring burning.',
   },
   {
     id: 'coxs-bazar',
@@ -42,6 +50,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [91.99, 21.43],
     zoom: 9.8,
     bounds: [91.7, 21.0, 92.3, 21.8],
+    boundaryIds: ['coxs-bazar'],
+    description: 'Cox’s Bazar spans the unbroken southeastern shoreline, encompassing maritime estuaries, protected forest enclaves, and coastal fisheries.',
   },
   {
     id: 'teknaf',
@@ -50,6 +60,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [92.3, 20.87],
     zoom: 10.2,
     bounds: [92.15, 20.7, 92.4, 21.1],
+    boundaryIds: ['teknaf-area'],
+    description: 'Southernmost border peninsula along the Naf River and Bay of Bengal, featuring coastal wildlife sanctuaries and localized biomass fires.',
   },
   {
     id: 'bandarban',
@@ -58,6 +70,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [92.22, 22.2],
     zoom: 9.8,
     bounds: [92.0, 21.7, 92.6, 22.4],
+    boundaryIds: ['bandarban'],
+    description: 'Bandarban features the highest peaks in Bangladesh, dense canopy ridges, and seasonal thermal detections tied to agricultural slash and upland clearing.',
   },
   {
     id: 'rangamati',
@@ -66,6 +80,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [92.18, 22.65],
     zoom: 9.5,
     bounds: [91.9, 22.3, 92.5, 23.1],
+    boundaryIds: ['rangamati'],
+    description: 'Montane basin surrounding Kaptai Lake with seasonal agricultural fire cycles and forestry clearings across adjacent highland tracts.',
   },
   {
     id: 'sylhet',
@@ -74,6 +90,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [91.87, 24.89],
     zoom: 9.6,
     bounds: [91.4, 24.5, 92.4, 25.2],
+    boundaryIds: ['sylhet'],
+    description: 'Sylhet is home to rolling tea gardens, wetland haor ecosystems, and tropical forest tracts experiencing seasonal pre-monsoon agricultural clearing.',
   },
   {
     id: 'sreemangal',
@@ -82,6 +100,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [91.73, 24.31],
     zoom: 10.5,
     bounds: [91.6, 24.15, 91.9, 24.45],
+    boundaryIds: ['sreemangal'],
+    description: 'Lawachara National Park and surrounding tea estates in the Moulvibazar district, representing high-conservation-value tropical rainforest.',
   },
   {
     id: 'dhaka',
@@ -90,6 +110,8 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [90.41, 23.81],
     zoom: 9.8,
     bounds: [90.1, 23.5, 90.7, 24.1],
+    boundaryIds: ['dhaka'],
+    description: 'Dhaka is the high-density metropolitan and industrial heart of Bangladesh, where satellite detections are primarily industrial thermal sources and peri-urban burning.',
   },
   {
     id: 'chittagong',
@@ -98,6 +120,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [91.83, 22.36],
     zoom: 9.8,
     bounds: [91.6, 22.1, 92.1, 22.6],
+    boundaryIds: ['chittagong'],
   },
   {
     id: 'rajshahi',
@@ -106,6 +129,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [88.6, 24.37],
     zoom: 9.5,
     bounds: [88.2, 24.1, 89.0, 24.8],
+    boundaryIds: ['rajshahi'],
   },
   {
     id: 'bogra',
@@ -114,6 +138,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [89.37, 24.85],
     zoom: 9.6,
     bounds: [89.1, 24.6, 89.6, 25.1],
+    boundaryIds: ['bogra'],
   },
   {
     id: 'rangpur',
@@ -122,6 +147,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [89.24, 25.74],
     zoom: 9.2,
     bounds: [88.8, 25.3, 89.6, 26.1],
+    boundaryIds: ['rangpur'],
   },
   {
     id: 'dinajpur',
@@ -130,6 +156,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [88.64, 25.63],
     zoom: 9.6,
     bounds: [88.4, 25.3, 89.0, 26.0],
+    boundaryIds: ['dinajpur'],
   },
   {
     id: 'khulna',
@@ -138,6 +165,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [89.54, 22.85],
     zoom: 9.8,
     bounds: [89.3, 22.6, 89.8, 23.1],
+    boundaryIds: ['khulna'],
   },
   {
     id: 'barisal',
@@ -146,6 +174,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [90.37, 22.7],
     zoom: 9.5,
     bounds: [90.1, 22.4, 90.7, 23.0],
+    boundaryIds: ['barisal'],
   },
   {
     id: 'mymensingh',
@@ -154,6 +183,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [90.41, 24.75],
     zoom: 9.5,
     bounds: [90.1, 24.4, 90.7, 25.1],
+    boundaryIds: ['mymensingh'],
   },
   {
     id: 'comilla',
@@ -162,6 +192,7 @@ const PLACES_CATALOG: PlaceItem[] = [
     center: [91.18, 23.46],
     zoom: 9.6,
     bounds: [90.9, 23.2, 91.5, 23.8],
+    boundaryIds: ['comilla'],
   },
   {
     id: 'kuakata',
@@ -175,9 +206,10 @@ const PLACES_CATALOG: PlaceItem[] = [
 
 export interface PlaceSearchProps {
   onSelectPlace: (place: PlaceItem, applyAsAreaFilter?: boolean) => void;
+  selectedPlace?: PlaceItem | null;
 }
 
-export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
+export function PlaceSearch({ onSelectPlace, selectedPlace = null }: PlaceSearchProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -223,7 +255,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
 
   const handleSelect = (place: PlaceItem, asFilter = false) => {
     onSelectPlace(place, asFilter);
-    setQuery('');
+    setQuery(place.name);
     setIsOpen(false);
     inputRef.current?.blur();
   };
@@ -264,7 +296,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
           type="text"
           className="place-search-input"
           placeholder="Search a place..."
-          value={query}
+          value={query || selectedPlace?.name || ''}
           onChange={e => {
             setQuery(e.target.value);
             setIsOpen(true);
@@ -298,7 +330,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
       {isOpen && (
         <div className="place-search-dropdown" role="listbox">
           <div className="search-dropdown-header">
-            <span>GEOGRAPHIC REGIONS & SATELLITE FOCUS AREAS</span>
+            <span>CURATED GEOGRAPHIC LOCATIONS</span>
             <span className="search-count">{filteredPlaces.length} locations</span>
           </div>
           <div className="search-results-list">
@@ -321,25 +353,32 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
                     <button
                       type="button"
                       className="result-action-btn"
-                      title="Fly map to location"
+                      title="Fly map camera to this location"
                       onClick={() => handleSelect(place, false)}
                     >
                       Fly to
                     </button>
                     {place.bounds && (
-                      <button
-                        type="button"
-                        className="result-action-btn is-filter"
-                        title="Filter observations to this area"
-                        onClick={() => handleSelect(place, true)}
-                      >
-                        Set Area
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="result-action-btn is-filter"
+                          title="Filter map & calendar to this rectangular query bbox (not an official administrative boundary)"
+                          onClick={() => handleSelect(place, true)}
+                        >
+                          Set Area Bbox
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
               ))
             )}
+          </div>
+          <div className="search-dropdown-footer">
+            <small>
+              Locations use curated rectangular bounding boxes for analytical filtering, not official regional polygons.
+            </small>
           </div>
         </div>
       )}

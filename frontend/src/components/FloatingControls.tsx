@@ -44,14 +44,16 @@ export function FloatingControls({
               : `Sub-area Filtered · ${observationCount.toLocaleString()} observations`}
           </span>
           {selectedBounds && (
-            <button
-              type="button"
-              className="clear-subarea-btn"
-              onClick={onClearSelectedBounds}
-              title="Reset to full Bangladesh"
-            >
-              ✕ Reset Area
-            </button>
+            <>
+              <button
+                type="button"
+                className="clear-subarea-btn"
+                onClick={onClearSelectedBounds}
+                title="Reset to full Bangladesh"
+              >
+                ✕ Reset Area
+              </button>
+            </>
           )}
         </div>
       )}
@@ -128,7 +130,7 @@ export function FloatingControls({
       {showLegend && (
         <aside className="floating-legend-card" role="region" aria-label="Map Legend">
           <div className="legend-header">
-            <h5>Map Layers & Cartography</h5>
+            <h5>Map Layers & Scientific Legend</h5>
             <button type="button" className="close-legend-btn" onClick={() => setShowLegend(false)}>
               ✕
             </button>
@@ -137,37 +139,48 @@ export function FloatingControls({
             <div className="legend-entry">
               <span className="legend-sample-point" />
               <div>
-                <strong>Active-Fire Detection Clusters</strong>
-                <p>Sensor-separated grid counts (scaled by max platform series; not fire perimeters).</p>
+                <strong>Spatial Density Cells (0.08° Grid)</strong>
+                <p>
+                  Aggregated detection counts scaled by the maximum single-sensor/platform series.
+                  Represents detection frequency—<strong>not</strong> fire intensity, burned area, fire severity, or an incident perimeter. MODIS and VIIRS counts are never summed.
+                </p>
               </div>
             </div>
             <div className="legend-entry">
               <span className="legend-sample-page-point" />
               <div>
-                <strong>Feed Page Observations</strong>
-                <p>Exact hotspot pixel nominal centers currently loaded in inspection feed.</p>
+                <strong>Source-Observation Drilldown</strong>
+                <p>
+                  Exact satellite detection coordinates (MODIS 1 km / VIIRS 375 m nominal pixel centers) currently loaded in the paginated inspection feed. Distinct from aggregated grid cells.
+                </p>
               </div>
             </div>
             <div className="legend-entry">
               <span className="legend-sample-country-line" />
               <div>
                 <strong>geoBoundaries 2015 Outline</strong>
-                <p>Display-only Bangladesh landmass reference (CC0 1.0); does not clip observations.</p>
+                <p>
+                  Display-only reference outline (geoBoundaries 2015 ADM0, CC0 1.0) indicating Bangladesh landmass. Display reference only; does <strong>not</strong> clip data or alter query counts.
+                </p>
               </div>
             </div>
             <div className="legend-entry">
               <span className="legend-sample-bbox-line" />
               <div>
-                <strong>Query Bounding Box</strong>
-                <p>Task-specified national bbox [88.0, 20.5, 92.7, 26.7] (includes edge overhang).</p>
+                <strong>Task-Specified Query Bounding Box</strong>
+                <p>
+                  National showcase bounding box [88.0°E, 20.5°N, 92.7°E, 26.7°N]. Includes adjacent border territory in India, Myanmar, and the Bay of Bengal; <strong>not</strong> an authoritative national polygon. Empty cells indicate unverified observation coverage, not zero fires.
+                </p>
               </div>
             </div>
             {selectedBounds && (
               <div className="legend-entry">
                 <span className="legend-sample-selected-line" />
                 <div>
-                  <strong>Selected Sub-Area</strong>
-                  <p>Active geographic filter box.</p>
+                  <strong>Active Sub-Area Filter</strong>
+                  <p>
+                    Rectangular query bounding box [{selectedBounds.map(n => n.toFixed(2)).join(', ')}]. Filters map density, calendar matrix, and observations to this sub-area.
+                  </p>
                 </div>
               </div>
             )}

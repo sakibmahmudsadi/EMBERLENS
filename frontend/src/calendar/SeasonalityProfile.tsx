@@ -39,31 +39,25 @@ export function SeasonalityProfile({ data }: { data: CalendarResponse }) {
 
   return (
     <section className="panel seasonality-panel" aria-label="Descriptive seasonal profile">
-      <h2>Seasonal pattern in returned detections</h2>
-      <p className="seasonality-note">
-        Bars show returned rows summed across the selected years. The median and middle 50% range below
-        use only years with records and no FIRMS-reported missing date for that product; no-record and
-        source-gap months are excluded, not treated as zero. This is exploratory observed-count context,
-        not an exposure-adjusted baseline, expected activity range, anomaly, or alert. Valid-pixel
-        opportunity remains unknown.
-      </p>
+      <div className="seasonality-heading"><h2>Seasonality</h2><span>returned detections by month</span></div>
       <div className="seasonality-series">
         {summaries.map(({ series, months, max }) => (
           <article className="seasonality-series-card" key={`${series.product_id}-${series.platform}`}>
-            <h3>{series.sensor} · {series.platform} · {series.product_id}</h3>
+            <h3><i />{series.sensor} · {series.platform}</h3>
             <div className="seasonality-bars" role="list" aria-label={`${series.sensor} detections by month`}>
               {months.map((month, index) => (
-                <div className="seasonality-month" role="listitem" key={MONTHS[index]}>
+                <div className="seasonality-month" role="listitem" tabIndex={0} key={MONTHS[index]} title={`${MONTHS[index]}: ${month.count.toLocaleString()} returned rows · ${month.yearsWithRecords} years with records · ${month.sourceGapYears} source-gap years · ${month.sampleCount ? `n=${month.sampleCount}, median ${month.median}, IQR ${month.lowerQuartile}–${month.upperQuartile}` : 'no eligible historical sample'}`}>
                   <span className="seasonality-count">{month.count.toLocaleString()}</span>
                   <div className="seasonality-track" title={`${MONTHS[index]}: ${month.count} records`}>
                     <span style={{ height: `${month.count > 0 ? Math.max(2, month.count / max * 100) : 0}%` }} />
                   </div>
                   <strong>{MONTHS[index]}</strong>
-                  <small>{month.yearsWithRecords}y · {month.sourceGapYears} gap</small>
-                  <small className="seasonality-range">
-                    {month.sampleCount ? `n${month.sampleCount} · med ${month.median}` : 'n0 · no sample'}
-                  </small>
-                  {month.sampleCount > 0 && <small className="seasonality-range">IQR {month.lowerQuartile}–{month.upperQuartile}</small>}
+                  <div className="seasonality-hover-detail" aria-hidden="true">
+                    <span>{month.yearsWithRecords} years with records</span>
+                    <span>{month.sourceGapYears} source-gap years</span>
+                    <span>{month.sampleCount ? `n=${month.sampleCount} · median ${month.median}` : 'No eligible sample'}</span>
+                    {month.sampleCount > 0 && <span>IQR {month.lowerQuartile}–{month.upperQuartile}</span>}
+                  </div>
                 </div>
               ))}
             </div>

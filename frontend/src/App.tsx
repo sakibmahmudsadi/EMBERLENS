@@ -3,6 +3,7 @@ import { PlaceSearch, type PlaceItem } from './components/PlaceSearch';
 import { FilterDock, type QualityFilters } from './components/FilterDock';
 import { FloatingControls } from './components/FloatingControls';
 import { AnalyticsDrawer, type CalendarInspection } from './components/AnalyticsDrawer';
+import { PlaceAnalysisWorkspace } from './components/PlaceAnalysisWorkspace';
 import { HistoryPlayback } from './features/HistoryPlayback';
 import { api } from './lib/apiClient';
 import type {
@@ -83,6 +84,11 @@ export default function App() {
   const [appliedStart, setAppliedStart] = useState(INITIAL_START);
   const [appliedEnd, setAppliedEnd] = useState(INITIAL_END);
   const [observations, setObservations] = useState<ObservationListItem[]>([]);
+  const [analysisObservations, setAnalysisObservations] = useState<ObservationListItem[]>([]);
+  const [analysisCalendar, setAnalysisCalendar] = useState<CalendarResponse | null>(null);
+  const [analysisObservationTotal, setAnalysisObservationTotal] = useState(0);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisPage, setAnalysisPage] = useState(1);
   const [mapCells, setMapCells] = useState<MapDensityCell[]>([]);
   const [mapViewBounds, setMapViewBounds] = useState<AreaBounds | null>(null);
   const [selectedBounds, setSelectedBounds] = useState<AreaBounds | null>(null);
@@ -109,10 +115,16 @@ export default function App() {
   // Drawer expansion state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Place Analysis Workspace state
+  const [isPlaceAnalysisOpen, setIsPlaceAnalysisOpen] = useState(false);
+  const [analyzedPlace, setAnalyzedPlace] = useState<PlaceItem | null>(null);
+  const [analysisPreviewImage, setAnalysisPreviewImage] = useState<string | null>(null);
+
   // Map handle ref for zoom & flyTo
   const mapRef = useRef<HotspotMapHandle>(null);
 
   const requestSequence = useRef(0);
+  const analysisRequestSequence = useRef(0);
   const playbackRequestSequence = useRef(0);
   const playbackTimer = useRef<number | null>(null);
   const playbackRunning = useRef(false);
@@ -231,6 +243,59 @@ export default function App() {
   useEffect(() => {
     if (aoi) void load(1, null);
   }, [aoi, load]);
+
+  // Place Analysis has its own spatial query scope so searching never changes
+  // the map's explicit Set Area Bbox filter or the map's loaded observations.
+  const analysisBounds = analyzedPlace?.bounds ?? DEMO_BOUNDS;
+  useEffect(() => {
+    if (!isPlaceAnalysisOpen || !aoi) return;
+    const requestId = ++analysisRequestSequence.current;
+    const query = new URLSearchParams({
+      aoi_id: aoi.aoi_id,
+      start: appliedStart,
+      end: apiExclusiveEnd(appliedEnd),
+      bounds: analysisBounds.join(','),
+      page: String(analysisPage),
+      page_size: String(PAGE_SIZE),
+    });
+    if (filters.sensors.length) query.set('sensors', filters.sensors.join(','));
+    if (filters.platforms.length) query.set('platforms', filters.platforms.join(','));
+    if (filters.products.length) query.set('products', filters.products.join(','));
+    if (qualityFilters.min_frp_native !== '') query.set('min_frp_native', qualityFilters.min_frp_native);
+    if (qualityFilters.daynight) query.set('daynight', qualityFilters.daynight);
+    if (qualityFilters.min_modis_confidence !== '') query.set('min_modis_confidence', qualityFilters.min_modis_confidence);
+    if (qualityFilters.viirs_confidence_classes.length)
+      query.set('viirs_confidence_classes', qualityFilters.viirs_confidence_classes.join(','));
+
+    setAnalysisLoading(true);
+    Promise.all([api.observations(query), api.calendar(query)])
+      .then(([result, calendarResult]) => {
+        if (requestId !== analysisRequestSequence.current) return;
+        setAnalysisObservations(result.items ?? result.data ?? []);
+        setAnalysisObservationTotal(result.total ?? result.pagination?.total ?? 0);
+        setAnalysisCalendar(calendarResult);
+      })
+      .catch(cause => {
+        if (requestId !== analysisRequestSequence.current) return;
+        setAnalysisObservations([]);
+        setAnalysisObservationTotal(0);
+        setAnalysisCalendar(null);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (requestId === analysisRequestSequence.current) setAnalysisLoading(false);
+      });
+    return () => { analysisRequestSequence.current += 1; };
+  }, [isPlaceAnalysisOpen, aoi, analysisBounds, appliedStart, appliedEnd, filters, qualityFilters, analysisPage]);
+
+  useEffect(() => {
+    if (!isPlaceAnalysisOpen) return;
+    let cancelled = false;
+    void mapRef.current?.capturePreview().then(image => {
+      if (!cancelled) setAnalysisPreviewImage(image);
+    });
+    return () => { cancelled = true; };
+  }, [isPlaceAnalysisOpen, analyzedPlace]);
 
   const playbackStartYear = Number(appliedStart.slice(0, 4));
   const playbackEndYear = Number(appliedEnd.slice(0, 4));
@@ -395,6 +460,7 @@ export default function App() {
       return;
     }
     resetMapPlayback();
+    setAnalysisPage(1);
     setCalendarInspection(null);
     setAppliedStart(start);
     setAppliedEnd(end);
@@ -402,19 +468,24 @@ export default function App() {
 
   const handleSensorsChange = (newFilters: SensorFilter) => {
     resetMapPlayback();
+    setAnalysisPage(1);
     setCalendarInspection(null);
     setFilters(newFilters);
   };
 
   const handleQualityFiltersChange = (newQuality: QualityFilters) => {
     resetMapPlayback();
+    setAnalysisPage(1);
     setCalendarInspection(null);
     setQualityFilters(newQuality);
   };
 
   // Place search selection handler
   const handleSelectPlace = (place: PlaceItem, applyAsAreaFilter = false) => {
-    mapRef.current?.flyTo(place.center, place.zoom);
+    if (place.bounds) mapRef.current?.fitBounds(place.bounds, place.zoom);
+    else mapRef.current?.flyTo(place.center, place.zoom);
+    setAnalyzedPlace(place);
+    setAnalysisPage(1);
     if (applyAsAreaFilter && place.bounds) {
       resetMapPlayback();
       setCalendarInspection(null);
@@ -447,6 +518,8 @@ export default function App() {
             cells={mapCells}
             observations={mapPageObservations}
             selectedBounds={selectedBounds}
+            focusBounds={analyzedPlace?.bounds ?? null}
+            focusBoundaryIds={analyzedPlace?.boundaryIds ?? []}
             onViewBoundsChange={setMapViewBounds}
             onSelect={id => {
               setSelectedObservation(id);
@@ -466,7 +539,7 @@ export default function App() {
 
         <div className="topbar-right-group">
           {/* Functional Place Search */}
-          <PlaceSearch onSelectPlace={handleSelectPlace} />
+          <PlaceSearch onSelectPlace={handleSelectPlace} selectedPlace={analyzedPlace} />
 
           {/* Quick Analytics & Calendar Trigger Button */}
           <button
@@ -520,8 +593,11 @@ export default function App() {
         onPeriodChange={handlePeriodChange}
         qualityFilters={qualityFilters}
         onQualityFiltersChange={handleQualityFiltersChange}
-        isDrawerOpen={isDrawerOpen}
-        onToggleDrawer={() => setIsDrawerOpen(prev => !prev)}
+        isDrawerOpen={isPlaceAnalysisOpen}
+        onToggleDrawer={() => {
+          setIsDrawerOpen(false);
+          setIsPlaceAnalysisOpen(prev => !prev);
+        }}
         loading={loading}
       />
 
@@ -601,6 +677,35 @@ export default function App() {
         qualityFilters={qualityFilters}
         mapDensitySupported={mapDensitySupported}
         coverageSummary={coverageSummary}
+      />
+
+      {/* 7. Contextual Place Analysis Workspace (Experience B) */}
+      <PlaceAnalysisWorkspace
+        isOpen={isPlaceAnalysisOpen}
+        place={analyzedPlace}
+        onClose={() => setIsPlaceAnalysisOpen(false)}
+        onSelectPlace={handleSelectPlace}
+        calendar={analysisCalendar}
+        observations={analysisObservations}
+        observationTotal={analysisObservationTotal}
+        selectedObservation={selectedObservation}
+        onSelectObservation={setSelectedObservation}
+        page={analysisPage}
+        pageSize={PAGE_SIZE}
+        onPageChange={setAnalysisPage}
+        loading={analysisLoading}
+        sensorOptions={sensorOptions}
+        sensorsFilter={filters}
+        onSensorsChange={handleSensorsChange}
+        appliedStart={appliedStart}
+        appliedEnd={appliedEnd}
+        onPeriodChange={handlePeriodChange}
+        qualityFilters={qualityFilters}
+        onQualityFiltersChange={handleQualityFiltersChange}
+        aoiId={aoi?.aoi_id ?? 'bangladesh-bd'}
+        selectedBounds={analysisBounds}
+        previewImage={analysisPreviewImage}
+        qualityFilteringAvailable={mapDensitySupported ?? false}
       />
     </div>
   );

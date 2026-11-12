@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import * as maplibregl from 'maplibre-gl';
 import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import type { Feature, Geometry, Position } from 'geojson';
 import type { MapDensityCell, ObservationListItem } from '../lib/types';
 
 maplibregl.setWorkerUrl(mapLibreWorkerUrl);
@@ -9,10 +10,14 @@ maplibregl.setWorkerUrl(mapLibreWorkerUrl);
 const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const AOI_URL = '/aoi/bangladesh-national.geojson';
 const COUNTRY_OUTLINE_URL = '/aoi/bangladesh-country-outline.geojson';
+const PLACE_BOUNDARIES_URL = '/aoi/search-place-boundaries.geojson';
 export type AreaBounds = [number, number, number, number];
+type PlaceBoundary = Feature<Geometry, { placeId?: string; boundaryName?: string }>;
 
 export interface HotspotMapHandle {
   flyTo: (center: [number, number], zoom?: number) => void;
+  fitBounds: (bounds: AreaBounds, maxZoom?: number) => void;
+  capturePreview: () => Promise<string | null>;
   zoomIn: () => void;
   zoomOut: () => void;
   resetView: () => void;
@@ -23,6 +28,8 @@ export interface HotspotMapProps {
   cells: MapDensityCell[];
   observations: ObservationListItem[];
   selectedBounds: AreaBounds | null;
+  focusBounds: AreaBounds | null;
+  focusBoundaryIds: string[];
   onViewBoundsChange: (bounds: AreaBounds) => void;
   onSelect: (id: string) => void;
 }
@@ -30,8 +37,88 @@ export interface HotspotMapProps {
 const DEFAULT_CENTER: [number, number] = [90.35, 23.6];
 const DEFAULT_ZOOM = 6.2;
 
+function areaFeatureCollection(bounds: AreaBounds | null, boundaries: PlaceBoundary[] = [], placeIds: string[] = []) {
+  const placeFeatures = boundaries.filter(feature => feature.properties?.placeId && placeIds.includes(feature.properties.placeId));
+  if (placeFeatures.length) return { type: 'FeatureCollection' as const, features: placeFeatures };
+  if (!bounds || placeIds.length) return { type: 'FeatureCollection' as const, features: [] };
+  const [west, south, east, north] = bounds;
+  return {
+    type: 'FeatureCollection' as const,
+    features: [{
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
+      },
+      properties: {},
+    }],
+  };
+}
+
+function pointInRing(point: [number, number], ring: Position[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const intersects = (yi > point[1]) !== (yj > point[1]) &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(point: [number, number], rings: Position[][]): boolean {
+  return Boolean(rings[0] && pointInRing(point, rings[0]) && !rings.slice(1).some(ring => pointInRing(point, ring)));
+}
+
+function pointInGeometry(point: [number, number], geometry: Geometry): boolean {
+  if (geometry.type === 'Polygon') return pointInPolygon(point, geometry.coordinates);
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.some(polygon => pointInPolygon(point, polygon));
+  return false;
+}
+
+function pointIsInFocus(
+  point: [number, number],
+  bounds: AreaBounds | null,
+  boundaryIds: string[],
+  boundaries: PlaceBoundary[],
+): boolean {
+  const geometries = boundaries
+    .filter(feature => feature.properties?.placeId && boundaryIds.includes(feature.properties.placeId))
+    .map(feature => feature.geometry);
+  if (geometries.length) return geometries.some(geometry => pointInGeometry(point, geometry));
+  if (!bounds) return true;
+  return point[0] >= bounds[0] && point[0] <= bounds[2] && point[1] >= bounds[1] && point[1] <= bounds[3];
+}
+
+function cellFeatureCollection(cells: MapDensityCell[], bounds: AreaBounds | null, ids: string[], boundaries: PlaceBoundary[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: cells
+      .filter(cell => pointIsInFocus([cell.longitude, cell.latitude], bounds, ids, boundaries))
+      .map(cell => ({
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [cell.longitude, cell.latitude] as [number, number] },
+        properties: { longitude: cell.longitude, latitude: cell.latitude, max_series_count: cell.max_series_count, series_json: JSON.stringify(cell.series) },
+      })),
+  };
+}
+
+function observationFeatureCollection(observations: ObservationListItem[], bounds: AreaBounds | null, ids: string[], boundaries: PlaceBoundary[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: observations
+      .filter(observation => pointIsInFocus([observation.longitude, observation.latitude], bounds, ids, boundaries))
+      .map(observation => ({
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [observation.longitude, observation.latitude] as [number, number] },
+        properties: { observation_id: observation.observation_id, longitude: observation.longitude, latitude: observation.latitude },
+      })),
+  };
+}
+
 export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function HotspotMap(
-  { cells, observations, selectedBounds, onViewBoundsChange, onSelect },
+  { cells, observations, selectedBounds, focusBounds, focusBoundaryIds, onViewBoundsChange, onSelect },
   ref,
 ) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -45,10 +132,35 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
   observationsRef.current = observations;
   const selectedBoundsRef = useRef(selectedBounds);
   selectedBoundsRef.current = selectedBounds;
+  const focusBoundsRef = useRef(focusBounds);
+  focusBoundsRef.current = focusBounds;
+  const focusBoundaryIdsRef = useRef(focusBoundaryIds);
+  focusBoundaryIdsRef.current = focusBoundaryIds;
+  const placeBoundariesRef = useRef<PlaceBoundary[]>([]);
 
   useImperativeHandle(ref, () => ({
     flyTo: (center: [number, number], zoom?: number) => {
       map.current?.flyTo({ center, zoom: zoom ?? 8.5, essential: true, duration: 1800 });
+    },
+    fitBounds: (bounds: AreaBounds, maxZoom?: number) => {
+      const [west, south, east, north] = bounds;
+      map.current?.fitBounds([[west, south], [east, north]], {
+        padding: { top: 74, right: 96, bottom: 126, left: 96 },
+        maxZoom: maxZoom ?? 9,
+        duration: 1500,
+      });
+    },
+    capturePreview: () => {
+      const instance = map.current;
+      if (!instance) return Promise.resolve(null);
+      return new Promise(resolve => {
+        const capture = () => {
+          try { resolve(instance.getCanvas().toDataURL('image/png')); }
+          catch { resolve(null); }
+        };
+        if (!instance.isMoving()) requestAnimationFrame(capture);
+        else instance.once('moveend', () => requestAnimationFrame(capture));
+      });
     },
     zoomIn: () => {
       map.current?.zoomIn({ duration: 300 });
@@ -72,6 +184,7 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: false,
+      canvasContextAttributes: { preserveDrawingBuffer: true },
     });
     map.current = m;
     (window as unknown as { __emberlens_map?: maplibregl.Map }).__emberlens_map = m;
@@ -83,6 +196,10 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
     // Add scale control to bottom-left as seen in the reference visual
     const scale = new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' });
     m.addControl(scale, 'bottom-left');
+    m.addControl(new maplibregl.AttributionControl({
+      compact: true,
+      customAttribution: 'Place boundaries: geoBoundaries · Ramsar / WDPA',
+    }), 'bottom-right');
 
     m.on('load', async () => {
       // Fine-tune Carto Dark Matter style for a cinematic satellite cartography appearance
@@ -180,74 +297,104 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
         /* Reference outline is optional; query AOI remains visible */
       }
 
+      try {
+        const response = await fetch(PLACE_BOUNDARIES_URL);
+        if (!response.ok) throw new Error(`Place boundary request failed (${response.status})`);
+        const geojson = await response.json();
+        placeBoundariesRef.current = Array.isArray(geojson.features) ? geojson.features as PlaceBoundary[] : [];
+      } catch {
+        /* The map stays usable with its curated search bounds if boundary data cannot load. */
+      }
+
+      const initialBounds = focusBoundsRef.current ?? selectedBoundsRef.current;
+      const initialPlaceIds = focusBoundaryIdsRef.current;
+      const initialCells = cellFeatureCollection(cellsRef.current, initialBounds, initialPlaceIds, placeBoundariesRef.current);
+      const initialObservations = observationFeatureCollection(observationsRef.current, initialBounds, initialPlaceIds, placeBoundariesRef.current);
+
       // Hotspot density observation points - two layers for glowing ember effect
       m.addSource('density-cells', {
         type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: cellsRef.current.map(cell => ({
-            type: 'Feature' as const,
-            geometry: { type: 'Point' as const, coordinates: [cell.longitude, cell.latitude] },
-            properties: { max_series_count: cell.max_series_count, series_json: JSON.stringify(cell.series) },
-          })),
-        },
+        data: initialCells,
       });
 
-      // Layer 1: Radiant ember glow halo
+      // Layer 1: Radiant ember glow halo - zoom-dependent
       m.addLayer({
         id: 'density-cells-glow',
         type: 'circle',
         source: 'density-cells',
         paint: {
-          'circle-radius': ['step', ['get', 'max_series_count'], 4.2, 10, 5.8, 100, 8.5, 1000, 12.5, 10000, 18.0],
-          'circle-color': '#ff3a00',
-          'circle-opacity': 0.55,
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            5, ['step', ['get', 'max_series_count'], 2.4, 50, 3.2, 500, 4.5, 5000, 6.0],
+            7.5, ['step', ['get', 'max_series_count'], 3.8, 50, 5.2, 500, 7.2, 5000, 9.5],
+            10, ['step', ['get', 'max_series_count'], 5.5, 50, 8.0, 500, 11.0, 5000, 14.0],
+          ],
+          'circle-color': '#d95300',
+          'circle-opacity': [
+            'interpolate', ['linear'], ['zoom'],
+            5, 0.38,
+            7.5, 0.42,
+            10, 0.20,
+          ],
           'circle-blur': 0.85,
         },
       });
 
-      // Layer 2: Intense fiery core with bright stroke
+      // Layer 2: Restrained amber density core - zoom-dependent
       m.addLayer({
         id: 'density-cells',
         type: 'circle',
         source: 'density-cells',
         paint: {
-          'circle-radius': ['step', ['get', 'max_series_count'], 2.0, 10, 2.8, 100, 4.2, 1000, 6.0, 10000, 8.5],
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            5, ['step', ['get', 'max_series_count'], 1.2, 50, 1.8, 500, 2.4, 5000, 3.2],
+            7.5, ['step', ['get', 'max_series_count'], 2.0, 50, 2.8, 500, 3.8, 5000, 5.0],
+            10, ['step', ['get', 'max_series_count'], 3.2, 50, 4.4, 500, 5.8, 5000, 7.5],
+          ],
           'circle-color': [
             'step', ['get', 'max_series_count'],
-            '#ff5500', 50,
-            '#ff7700', 500,
-            '#ffa010', 5000,
-            '#ffe066',
+            '#bf4f00', 50,
+            '#d96500', 500,
+            '#ec7d0a', 5000,
+            '#fa9426',
           ],
-          'circle-stroke-color': '#fff6e5',
-          'circle-stroke-width': 0.6,
-          'circle-stroke-opacity': 0.85,
-          'circle-opacity': 0.95,
+          'circle-stroke-color': '#140904',
+          'circle-stroke-width': [
+            'interpolate', ['linear'], ['zoom'],
+            5, 0.3,
+            8, 0.7,
+            11, 1.0,
+          ],
+          'circle-stroke-opacity': 0.75,
+          'circle-opacity': [
+            'interpolate', ['linear'], ['zoom'],
+            5, 0.90,
+            8, 0.88,
+            11, 0.75,
+          ],
         },
       });
 
-      // Page observations (active feed points drilldown)
+      // Page observations (active feed points drilldown - individual satellite pixels)
       m.addSource('page-observations', {
         type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: observationsRef.current.map(observation => ({
-            type: 'Feature' as const,
-            geometry: { type: 'Point' as const, coordinates: [observation.longitude, observation.latitude] },
-            properties: { observation_id: observation.observation_id },
-          })),
-        },
+        data: initialObservations,
       });
       m.addLayer({
         id: 'page-observations-glow',
         type: 'circle',
         source: 'page-observations',
         paint: {
-          'circle-radius': 7.0,
-          'circle-color': '#ff6000',
-          'circle-opacity': 0.6,
-          'circle-blur': 0.7,
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            6, 5.0,
+            9, 8.5,
+            12, 12.0,
+          ],
+          'circle-color': '#38bdf8',
+          'circle-opacity': 0.45,
+          'circle-blur': 0.75,
         },
       });
       m.addLayer({
@@ -255,53 +402,54 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
         type: 'circle',
         source: 'page-observations',
         paint: {
-          'circle-radius': 3.6,
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            6, 3.0,
+            9, 4.5,
+            12, 6.0,
+          ],
           'circle-color': '#ffffff',
-          'circle-stroke-color': '#ff4900',
-          'circle-stroke-width': 1.4,
+          'circle-stroke-color': '#0284c7',
+          'circle-stroke-width': 2.0,
           'circle-opacity': 1.0,
         },
       });
 
-      // Selected area bounds box
-      const [west, south, east, north] = selectedBoundsRef.current ?? [0, 0, 0, 0];
+      // Searched-place spotlight (or the explicitly selected map area).
       m.addSource('selected-area', {
         type: 'geojson',
-        data: selectedBoundsRef.current
-          ? {
-              type: 'FeatureCollection',
-              features: [
-                {
-                  type: 'Feature',
-                  geometry: {
-                    type: 'Polygon',
-                    coordinates: [
-                      [
-                        [west, south],
-                        [east, south],
-                        [east, north],
-                        [west, north],
-                        [west, south],
-                      ],
-                    ],
-                  },
-                  properties: {},
-                },
-              ],
-            }
-          : { type: 'FeatureCollection', features: [] },
+        data: areaFeatureCollection(initialBounds, placeBoundariesRef.current, initialPlaceIds),
       });
       m.addLayer({
         id: 'selected-area-fill',
         type: 'fill',
         source: 'selected-area',
-        paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.05 },
+        paint: { 'fill-color': '#ff7b32', 'fill-opacity': 0.035 },
+      });
+      m.addLayer({
+        id: 'selected-area-glow',
+        type: 'line',
+        source: 'selected-area',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#ff762d',
+          'line-width': 8,
+          'line-opacity': 0.38,
+          'line-blur': 3.5,
+          'line-dasharray': initialPlaceIds.length ? [0.15, 1.8] : [1, 0],
+        },
       });
       m.addLayer({
         id: 'selected-area-line',
         type: 'line',
         source: 'selected-area',
-        paint: { 'line-color': '#38bdf8', 'line-width': 1.8, 'line-dasharray': [3, 2] },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#ff9a43',
+          'line-width': 2.2,
+          'line-opacity': 0.98,
+          'line-dasharray': initialPlaceIds.length ? [0.15, 1.8] : [1, 0],
+        },
       });
 
       // Interactions
@@ -328,17 +476,24 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
         const content = document.createElement('div');
         content.className = 'map-cell-popup';
         const heading = document.createElement('strong');
-        heading.textContent = 'Detections in Grid Cell';
+        heading.textContent = 'Spatial Density Cell (0.08° Grid)';
         content.appendChild(heading);
+
+        const sub = document.createElement('div');
+        sub.className = 'map-cell-subheading';
+        sub.textContent = 'Sensor-specific detection counts:';
+        content.appendChild(sub);
+
         for (const item of series) {
           const row = document.createElement('p');
           row.textContent = `${item.sensor} · ${item.platform} · ${item.product_id}: ${item.observation_count.toLocaleString()}`;
           content.appendChild(row);
         }
         const note = document.createElement('small');
-        note.textContent = 'Counts stay sensor-specific; cell is an observation location, not a fire perimeter.';
+        note.textContent =
+          'Marker represents detection frequency within cell, not fire intensity, burned area, or an incident perimeter. MODIS and VIIRS counts are never summed.';
         content.appendChild(note);
-        new maplibregl.Popup({ closeButton: true, maxWidth: '320px', className: 'ember-popup' })
+        new maplibregl.Popup({ closeButton: true, maxWidth: '340px', className: 'ember-popup' })
           .setLngLat(e.lngLat)
           .setDOMContent(content)
           .addTo(m);
@@ -385,15 +540,8 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
     if (!m) return;
     const src = m.getSource('density-cells') as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
-    src.setData({
-      type: 'FeatureCollection',
-      features: cells.map(cell => ({
-        type: 'Feature' as const,
-        geometry: { type: 'Point' as const, coordinates: [cell.longitude, cell.latitude] },
-        properties: { max_series_count: cell.max_series_count, series_json: JSON.stringify(cell.series) },
-      })),
-    });
-  }, [cells]);
+    src.setData(cellFeatureCollection(cells, focusBounds ?? selectedBounds, focusBoundaryIds, placeBoundariesRef.current));
+  }, [cells, focusBounds, selectedBounds, focusBoundaryIds]);
 
   useEffect(() => {
     observationsRef.current = observations;
@@ -401,15 +549,8 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
     if (!m) return;
     const src = m.getSource('page-observations') as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
-    src.setData({
-      type: 'FeatureCollection',
-      features: observations.map(observation => ({
-        type: 'Feature' as const,
-        geometry: { type: 'Point' as const, coordinates: [observation.longitude, observation.latitude] },
-        properties: { observation_id: observation.observation_id },
-      })),
-    });
-  }, [observations]);
+    src.setData(observationFeatureCollection(observations, focusBounds ?? selectedBounds, focusBoundaryIds, placeBoundariesRef.current));
+  }, [observations, focusBounds, selectedBounds, focusBoundaryIds]);
 
   useEffect(() => {
     selectedBoundsRef.current = selectedBounds;
@@ -417,33 +558,16 @@ export const HotspotMap = forwardRef<HotspotMapHandle, HotspotMapProps>(function
     if (!m) return;
     const source = m.getSource('selected-area') as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
-    const [west, south, east, north] = selectedBounds ?? [0, 0, 0, 0];
-    source.setData(
-      selectedBounds
-        ? {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: {
-                  type: 'Polygon',
-                  coordinates: [
-                    [
-                      [west, south],
-                      [east, south],
-                      [east, north],
-                      [west, north],
-                      [west, south],
-                    ],
-                  ],
-                },
-                properties: {},
-              },
-            ],
-          }
-        : { type: 'FeatureCollection', features: [] },
-    );
-  }, [selectedBounds]);
+    source.setData(areaFeatureCollection(focusBounds ?? selectedBounds, placeBoundariesRef.current, focusBoundaryIds));
+    const dotted = focusBoundaryIds.length > 0;
+    for (const layer of ['selected-area-glow', 'selected-area-line']) {
+      if (m.getLayer(layer)) m.setPaintProperty(layer, 'line-dasharray', dotted ? [0.15, 1.8] : [1, 0]);
+    }
+  }, [selectedBounds, focusBounds, focusBoundaryIds]);
+
+  useEffect(() => {
+    focusBoundsRef.current = focusBounds;
+  }, [focusBounds]);
 
   return (
     <div className="map-viewport">
